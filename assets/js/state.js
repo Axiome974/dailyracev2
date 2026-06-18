@@ -8,6 +8,8 @@ function defaultState() {
         turn: { date: null, playerId: null, phase: "idle", lastResult: null },
         winnerId: null,
         log: [],
+        // poids relatifs par id de bonus ; cle absente = poids par defaut (1).
+        bonusWeights: {},
     };
 }
 

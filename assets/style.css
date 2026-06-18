@@ -1,16 +1,148 @@
 :root {
+    /* Valeurs par defaut (theme "aurore") tant que le JS n'a pas encore pose
+       data-theme/data-mode sur <html>, pour eviter un flash sans couleur. */
     --bg-1: #2b2c29;
     --bg-2: #00cec9;
-    --card-bg: #ffffff;
-    --ink: #2d3436;
-    --ink-soft: #636e72;
     --accent: #ff5d8f;
     --accent-2: #00b894;
     --warn: #ff7675;
     --gold: #fdcb6e;
     --radius: 18px;
-    --shadow: 0 10px 30px rgba(45, 52, 54, 0.18);
     font-size: 16px;
+}
+
+/* Mode clair/sombre : independant du theme de couleur ci-dessous. Pilote la
+   "matiere" de l'interface (cartes, texte, surfaces neutres) ; le theme pilote
+   la teinte (fond anime, accents). Les deux se combinent librement. */
+:root,
+[data-mode="light"] {
+    --card-bg: #ffffff;
+    --ink: #2d3436;
+    --ink-soft: #636e72;
+    --surface: #f1f2f6;
+    --surface-hover: #e9e9f0;
+    --border-soft: #eeeeee;
+    --shadow: 0 10px 30px rgba(45, 52, 54, 0.18);
+    --track-bg-1: #fef6e4;
+    --track-bg-2: #ffe0b3;
+}
+
+[data-mode="dark"] {
+    --card-bg: #1e1e2a;
+    --ink: #eceaf2;
+    --ink-soft: #a8a4bd;
+    --surface: #2a2a3a;
+    --surface-hover: #34344a;
+    --border-soft: #3a3a4d;
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+    --track-bg-1: #2a2118;
+    --track-bg-2: #4a3520;
+}
+
+[data-theme="aurore"] {
+    --bg-1: #2b2c29;
+    --bg-2: #00cec9;
+    --accent: #ff5d8f;
+    --accent-2: #00b894;
+    --warn: #ff7675;
+    --gold: #fdcb6e;
+}
+
+[data-theme="neon"] {
+    --bg-1: #1a0b2e;
+    --bg-2: #ff2bd6;
+    --accent: #00f0ff;
+    --accent-2: #7c3aed;
+    --warn: #ff4d6d;
+    --gold: #ffd60a;
+}
+
+[data-theme="ocean"] {
+    --bg-1: #032f4a;
+    --bg-2: #05a8aa;
+    --accent: #ff8c42;
+    --accent-2: #00c2a8;
+    --warn: #ff6b6b;
+    --gold: #ffd166;
+}
+
+[data-theme="foret"] {
+    --bg-1: #1b4332;
+    --bg-2: #74c69d;
+    --accent: #f4a261;
+    --accent-2: #2a9d8f;
+    --warn: #e76f51;
+    --gold: #e9c46a;
+}
+
+[data-theme="sunset"] {
+    --bg-1: #3d0e4f;
+    --bg-2: #ff6b6b;
+    --accent: #ffd23f;
+    --accent-2: #ff8c42;
+    --warn: #d62828;
+    --gold: #ffba08;
+}
+
+[data-theme="minuit"] {
+    --bg-1: #0f0c29;
+    --bg-2: #302b63;
+    --accent: #ff2e87;
+    --accent-2: #00d9ff;
+    --warn: #ff4d6d;
+    --gold: #f9c80e;
+}
+
+[data-theme="papier"] {
+    --bg-1: #fafafa;
+    --bg-2: #d8d8d0;
+    --accent: #1a1a1a;
+    --accent-2: #4a4a4a;
+    --warn: #2a2a2a;
+    --gold: #6a6a6a;
+}
+
+[data-theme="papier-inverse"] {
+    --bg-1: #0a0a0a;
+    --bg-2: #2a2a2a;
+    --accent: #f5f5f5;
+    --accent-2: #cfcfcf;
+    --warn: #ffffff;
+    --gold: #e0e0e0;
+}
+
+[data-theme="dracula"] {
+    --bg-1: #282a36;
+    --bg-2: #bd93f9;
+    --accent: #ff79c6;
+    --accent-2: #50fa7b;
+    --warn: #ff5555;
+    --gold: #f1fa8c;
+}
+
+[data-theme="synthwave87"] {
+    --bg-1: #2d1b4e;
+    --bg-2: #ff6ec7;
+    --accent: #00d9ff;
+    --accent-2: #ff9e3d;
+    --warn: #ff2d55;
+    --gold: #ffd23f;
+}
+
+/* Themes "papier" : on retire toute couleur (y compris des emojis, que les
+   variables CSS ne peuvent pas teinter) via un filtre sur les conteneurs
+   principaux. L'inversion bascule aussi automatiquement les cartes blanches
+   et le texte sombre, sans avoir a dupliquer --card-bg/--ink par theme. */
+[data-theme="papier"] .app,
+[data-theme="papier"] .modal-overlay,
+[data-theme="papier"] .avatar-picker {
+    filter: grayscale(1);
+}
+
+[data-theme="papier-inverse"] .app,
+[data-theme="papier-inverse"] .modal-overlay,
+[data-theme="papier-inverse"] .avatar-picker {
+    filter: grayscale(1) invert(1);
 }
 
 * {
@@ -22,7 +154,7 @@ body {
     min-height: 100vh;
     font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
     color: var(--ink);
-    background: linear-gradient(135deg, var(--bg-1), var(--bg-2), #00b894, var(--bg-1));
+    background: linear-gradient(135deg, var(--bg-1), var(--bg-2), var(--accent-2), var(--bg-1));
     background-size: 300% 300%;
     animation: bg-pan 18s ease-in-out infinite;
     position: relative;
@@ -50,7 +182,7 @@ body::after {
 body::before {
     width: 380px;
     height: 380px;
-    background: #ff5d8f;
+    background: var(--accent);
     top: -120px;
     left: -100px;
     animation: float-blob-a 22s ease-in-out infinite;
@@ -59,7 +191,7 @@ body::before {
 body::after {
     width: 420px;
     height: 420px;
-    background: #fdcb6e;
+    background: var(--gold);
     bottom: -150px;
     right: -120px;
     animation: float-blob-b 26s ease-in-out infinite;
@@ -238,21 +370,6 @@ body::after {
     text-align: center;
 }
 
-#reset-race-btn {
-    width: 100%;
-    margin-top: 10px;
-}
-
-.scoreboard__session {
-    display: flex;
-    gap: 8px;
-    margin-top: 8px;
-}
-
-.scoreboard__session button {
-    flex: 1;
-    font-size: 0.82rem;
-}
 
 .add-player-form {
     display: flex;
@@ -260,7 +377,9 @@ body::after {
 }
 
 .add-player-form input {
-    border: 2px solid #eee;
+    background: var(--card-bg);
+    color: var(--ink);
+    border: 2px solid var(--border-soft);
     border-radius: 10px;
     padding: 8px 10px;
     font-size: 0.9rem;
@@ -325,7 +444,7 @@ body::after {
     gap: 10px;
     padding: 8px 10px;
     border-radius: 12px;
-    background: #f7f7fb;
+    background: var(--surface);
     border-left: 5px solid var(--player-color, var(--accent));
     transition: background 0.15s;
 }
@@ -385,7 +504,7 @@ body::after {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #fff;
+    background: var(--card-bg);
     border: none;
     border-radius: 50%;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
@@ -404,11 +523,51 @@ body::after {
     transform: scale(0.95);
 }
 
+.player__avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+
+/* Indicateurs d'effet passif (bouclier, givre...) places sur l'avatar */
+.status-badge {
+    position: absolute;
+    pointer-events: none;
+}
+
+.status-badge--shield {
+    inset: -5px;
+    border-radius: 50%;
+    border: 2px solid rgba(0, 200, 255, 0.75);
+    background: radial-gradient(circle, rgba(0, 200, 255, 0.18), transparent 70%);
+    animation: shield-bubble-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes shield-bubble-pulse {
+    0%, 100% { transform: scale(1); opacity: 0.75; }
+    50% { transform: scale(1.1); opacity: 1; }
+}
+
+.status-badge--frozen {
+    inset: -2px;
+    border-radius: 50%;
+    background: linear-gradient(160deg, rgba(206, 238, 255, 0.9), rgba(120, 195, 255, 0.65));
+    border: 2px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 0 8px rgba(150, 220, 255, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+}
+
+.status-badge--frozen::after {
+    content: "❄️";
+}
+
 /* Selecteur d'avatar */
 .avatar-picker {
     position: fixed;
     z-index: 55;
-    background: #fff;
+    background: var(--card-bg);
     border-radius: 14px;
     box-shadow: var(--shadow);
     padding: 12px;
@@ -430,7 +589,7 @@ body::after {
 
 .avatar-picker__option {
     border: 2px solid transparent;
-    background: #f7f7fb;
+    background: var(--surface);
     border-radius: 10px;
     font-size: 1.3rem;
     padding: 6px 0;
@@ -465,13 +624,13 @@ body::after {
 
 .player__bonuses {
     display: inline-block;
-    background: #f1f2f6;
+    background: var(--surface);
     border-radius: 999px;
     padding: 3px 9px;
     font-size: 0.85rem;
-    border: 1px solid #e3e3ea;
+    border: 1px solid var(--border-soft);
     white-space: nowrap;
-    color: #9aa0a6;
+    color: var(--ink-soft);
     opacity: 0.55;
     filter: grayscale(0.6);
     cursor: default;
@@ -540,6 +699,8 @@ body::after {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
     margin-bottom: 12px;
 }
 
@@ -547,9 +708,15 @@ body::after {
     margin: 0;
 }
 
-.flip-btn {
+.track-card__icons {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.icon-btn {
     border: none;
-    background: #f1f2f6;
+    background: var(--surface);
     border-radius: 10px;
     width: 34px;
     height: 34px;
@@ -559,12 +726,12 @@ body::after {
     transition: transform 0.18s cubic-bezier(.34, 1.56, .64, 1), background 0.15s ease;
 }
 
-.flip-btn:hover {
+.icon-btn:hover {
     transform: scale(1.1) rotate(8deg);
-    background: #e9e9f0;
+    background: var(--surface-hover);
 }
 
-.flip-btn:active {
+.icon-btn:active {
     transform: scale(0.92);
 }
 
@@ -607,7 +774,7 @@ body::after {
     grid-template-columns: repeat(var(--cols), 1fr);
     grid-auto-rows: auto;
     gap: 8px;
-    background: linear-gradient(160deg, #fef6e4, #ffe0b3);
+    background: linear-gradient(160deg, var(--track-bg-1), var(--track-bg-2));
     border-radius: 16px;
     padding: 14px;
     box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1);
@@ -931,7 +1098,8 @@ body::after {
 
 .dialog-input {
     width: 100%;
-    border: 2px solid #eee;
+    background: var(--card-bg);
+    border: 2px solid var(--border-soft);
     border-radius: 10px;
     padding: 10px;
     font-size: 0.8rem;
@@ -944,6 +1112,13 @@ body::after {
 .dialog-input:focus {
     outline: none;
     border-color: var(--accent);
+}
+
+.dialog-input--number {
+    font-family: inherit;
+    font-size: 1.4rem;
+    font-weight: 700;
+    text-align: center;
 }
 
 .dialog-actions {
@@ -977,6 +1152,207 @@ body::after {
 .dialog-btn--primary {
     background: linear-gradient(135deg, var(--accent), #ff8aab);
     color: #fff;
+}
+
+/* Panneau de reglages */
+.settings-card {
+    max-width: 420px;
+    text-align: left;
+}
+
+.settings-card h3 {
+    margin: 0 0 16px;
+    text-align: center;
+    font-size: 1.15rem;
+}
+
+.settings-section {
+    margin-bottom: 18px;
+}
+
+.settings-label {
+    display: block;
+    margin: 0 0 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--ink);
+}
+
+.settings-row {
+    display: flex;
+    gap: 8px;
+}
+
+.settings-row input {
+    flex: 1;
+    min-width: 0;
+    background: var(--card-bg);
+    border: 2px solid var(--border-soft);
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    text-align: center;
+    color: var(--ink);
+}
+
+.settings-row input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.settings-row .dialog-btn {
+    flex-shrink: 0;
+}
+
+.mode-toggle {
+    display: flex;
+    gap: 8px;
+}
+
+.mode-toggle__btn {
+    flex: 1;
+    background: var(--surface);
+    color: var(--ink);
+    border: 2px solid var(--border-soft);
+    border-radius: 10px;
+    padding: 10px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: transform 0.15s cubic-bezier(.34, 1.56, .64, 1), border-color 0.15s ease;
+}
+
+.mode-toggle__btn:hover {
+    transform: translateY(-2px);
+}
+
+.mode-toggle__btn--active {
+    border-color: var(--accent);
+    background: var(--surface-hover);
+}
+
+.theme-swatches {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.theme-swatch {
+    position: relative;
+    height: 52px;
+    margin-bottom: 18px;
+    border-radius: 12px;
+    border: 3px solid transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-start;
+    padding: 6px;
+    transition: transform 0.15s cubic-bezier(.34, 1.56, .64, 1), border-color 0.15s ease;
+}
+
+.theme-swatch:hover {
+    transform: scale(1.06);
+}
+
+.theme-swatch--active {
+    border-color: var(--ink);
+    box-shadow: 0 0 0 2px var(--card-bg) inset;
+}
+
+.theme-swatch__dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.theme-swatch__label {
+    position: absolute;
+    bottom: -18px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 0.62rem;
+    color: var(--ink-soft);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.settings-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.settings-label-row .settings-label {
+    margin: 0;
+}
+
+.reset-weights-btn {
+    flex-shrink: 0;
+    padding: 4px 10px;
+    font-size: 0.78rem;
+}
+
+.settings-hint {
+    margin: 0 0 8px;
+    font-size: 0.76rem;
+    color: var(--ink-soft);
+}
+
+.bonus-weights {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.bonus-weight-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 6px 10px;
+}
+
+.bonus-weight-row__icon {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.bonus-weight-row__label {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.85rem;
+    color: var(--ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bonus-weight-row__input {
+    width: 50px;
+    flex-shrink: 0;
+    background: var(--card-bg);
+    color: var(--ink);
+    border: 2px solid var(--border-soft);
+    border-radius: 8px;
+    padding: 4px 6px;
+    text-align: center;
+    font-weight: 700;
+}
+
+.bonus-weight-row__input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.bonus-weight-row--disabled {
+    opacity: 0.5;
 }
 
 /* Turn card */
@@ -1048,8 +1424,9 @@ body::after {
 
 .choice-btn {
     flex: 1 1 150px;
-    background: #fff;
-    border: 2px solid #eee;
+    background: var(--card-bg);
+    color: var(--ink);
+    border: 2px solid var(--border-soft);
     padding: 14px 10px;
     border-radius: 14px;
     display: flex;
@@ -1094,7 +1471,7 @@ body::after {
 .choice-btn[disabled]:hover {
     transform: none;
     box-shadow: none;
-    border-color: #eee;
+    border-color: var(--border-soft);
 }
 
 .choice-btn:disabled:hover .icon,
@@ -1199,7 +1576,8 @@ body::after {
 }
 
 .target-btn {
-    background: #f1f2f6;
+    background: var(--surface);
+    color: var(--ink);
     border: 2px solid transparent;
 }
 
@@ -1244,7 +1622,7 @@ body::after {
 .log-list li {
     padding: 6px 10px;
     border-radius: 8px;
-    background: #f7f7fb;
+    background: var(--surface);
 }
 
 .log-list .log-empty {
@@ -1277,12 +1655,12 @@ body::after {
 
 .ghost-btn--on-card {
     color: var(--ink);
-    background: #f1f2f6;
-    border-color: #eee;
+    background: var(--surface);
+    border-color: var(--border-soft);
 }
 
 .ghost-btn--on-card:hover {
-    background: #e9e9f0;
+    background: var(--surface-hover);
 }
 
 /* Selecteur de bonus (4eme choix du tour) */
@@ -1301,34 +1679,129 @@ body::after {
     display: flex;
     align-items: center;
     gap: 8px;
-    background: #f7f7fb;
+    background: var(--surface);
+    color: var(--ink);
     border-radius: 10px;
     padding: 8px 10px;
 }
 
-/* Confetti */
-.confetti-layer {
+/* Flash + secousse d'ecran a l'impact de la victoire */
+#flash-layer {
     position: fixed;
     inset: 0;
+    background: #fff;
+    opacity: 0;
     pointer-events: none;
+    z-index: 90;
+}
+
+#flash-layer.flash-active {
+    animation: flash-pulse 0.5s ease-out;
+}
+
+@keyframes flash-pulse {
+    0% { opacity: 0.9; }
+    100% { opacity: 0; }
+}
+
+.screen-shake {
+    animation: screen-shake 0.5s ease;
+}
+
+@keyframes screen-shake {
+    0%, 100% { transform: translate(0, 0); }
+    20% { transform: translate(-8px, 5px); }
+    40% { transform: translate(8px, -5px); }
+    60% { transform: translate(-6px, 7px); }
+    80% { transform: translate(6px, -7px); }
+}
+
+/* Banniere de victoire grandiose */
+.turn-card--victory {
+    border: 3px solid var(--gold);
+    box-shadow: 0 0 40px rgba(253, 203, 110, 0.7), var(--shadow);
+}
+
+.victory {
+    position: relative;
+    padding: 10px 0;
     overflow: hidden;
-    z-index: 60;
 }
 
-.confetti-piece {
+.victory__sunburst {
     position: absolute;
-    top: -20px;
-    width: 8px;
-    height: 14px;
-    opacity: 0.9;
-    animation: confetti-fall linear forwards;
+    inset: -60% -20%;
+    z-index: 0;
+    background: repeating-conic-gradient(from 0deg, rgba(253, 203, 110, 0.35) 0deg 8deg, transparent 8deg 20deg);
+    animation: sunburst-spin 9s linear infinite;
+    pointer-events: none;
 }
 
-@keyframes confetti-fall {
-    to {
-        transform: translateY(110vh) rotate(540deg);
-        opacity: 0.3;
-    }
+@keyframes sunburst-spin {
+    to { transform: rotate(360deg); }
+}
+
+.victory__trophy {
+    position: relative;
+    z-index: 1;
+    font-size: 4.5rem;
+    line-height: 1;
+    filter: drop-shadow(0 6px 14px rgba(253, 203, 110, 0.7));
+    animation: trophy-entrance 0.7s cubic-bezier(.34, 1.56, .64, 1), trophy-bounce 1.3s ease-in-out 0.7s infinite;
+}
+
+@keyframes trophy-entrance {
+    0% { transform: scale(0) rotate(-200deg); opacity: 0; }
+    100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+
+@keyframes trophy-bounce {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-12px) rotate(-5deg); }
+}
+
+.victory__avatar {
+    position: relative;
+    z-index: 1;
+    font-size: 2.4rem;
+    margin-top: -6px;
+    animation: victory-avatar-spin 1.6s ease-in-out 0.9s infinite;
+}
+
+@keyframes victory-avatar-spin {
+    0%, 100% { transform: rotate(0deg) scale(1); }
+    25% { transform: rotate(-12deg) scale(1.15); }
+    75% { transform: rotate(12deg) scale(1.15); }
+}
+
+.victory__title {
+    position: relative;
+    z-index: 1;
+    margin: 8px 0 0;
+    font-size: 2.1rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    background: linear-gradient(90deg, #ff5d8f, #fdcb6e, #6c5ce7, #00b894, #ff5d8f);
+    background-size: 250% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    animation: title-shine 2.4s linear infinite, victory-title-pop 0.6s cubic-bezier(.34, 1.56, .64, 1) 0.2s;
+}
+
+@keyframes victory-title-pop {
+    0% { transform: scale(0.4); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.victory__subtitle {
+    position: relative;
+    z-index: 1;
+    margin: 2px 0 0;
+    color: var(--ink-soft);
+    font-weight: 600;
 }
 
 @media (max-width: 480px) {

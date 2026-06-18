@@ -2,6 +2,7 @@ const dialogEl = document.getElementById("app-dialog");
 const titleEl = document.getElementById("dialog-title");
 const messageEl = document.getElementById("dialog-message");
 const inputEl = document.getElementById("dialog-input");
+const numberInputEl = document.getElementById("dialog-number-input");
 const actionsEl = document.getElementById("dialog-actions");
 const backdropEl = dialogEl.querySelector(".modal-overlay__backdrop");
 
@@ -24,10 +25,10 @@ document.addEventListener("keydown", (e) => {
     }
 });
 
-function open({ title, message, type, defaultValue = "", placeholder = "", confirmText = "OK", cancelText = "Annuler" }) {
+function open({ title, message, type, defaultValue = "", placeholder = "", confirmText = "OK", cancelText = "Annuler", min, max }) {
     return new Promise((resolve) => {
         activeResolve = resolve;
-        dismissValue = type === "prompt" ? null : type === "confirm" ? false : true;
+        dismissValue = type === "confirm" ? false : type === "alert" ? true : null;
 
         titleEl.textContent = title ?? "";
         titleEl.classList.toggle("hidden", !title);
@@ -35,9 +36,16 @@ function open({ title, message, type, defaultValue = "", placeholder = "", confi
         messageEl.classList.toggle("hidden", !message);
 
         inputEl.classList.toggle("hidden", type !== "prompt");
+        numberInputEl.classList.toggle("hidden", type !== "number");
+
         if (type === "prompt") {
             inputEl.value = defaultValue;
             inputEl.placeholder = placeholder;
+        }
+        if (type === "number") {
+            numberInputEl.value = defaultValue;
+            numberInputEl.min = min ?? "";
+            numberInputEl.max = max ?? "";
         }
 
         actionsEl.innerHTML = "";
@@ -47,7 +55,7 @@ function open({ title, message, type, defaultValue = "", placeholder = "", confi
             cancelBtn.type = "button";
             cancelBtn.className = "ghost-btn ghost-btn--on-card";
             cancelBtn.textContent = cancelText;
-            cancelBtn.addEventListener("click", () => close(type === "prompt" ? null : false));
+            cancelBtn.addEventListener("click", () => close(dismissValue));
             actionsEl.appendChild(cancelBtn);
         }
 
@@ -55,7 +63,11 @@ function open({ title, message, type, defaultValue = "", placeholder = "", confi
         okBtn.type = "button";
         okBtn.className = "dialog-btn dialog-btn--primary";
         okBtn.textContent = confirmText;
-        okBtn.addEventListener("click", () => close(type === "prompt" ? inputEl.value : true));
+        okBtn.addEventListener("click", () => {
+            if (type === "prompt") return close(inputEl.value);
+            if (type === "number") return close(numberInputEl.value);
+            close(true);
+        });
         actionsEl.appendChild(okBtn);
 
         dialogEl.classList.remove("hidden");
@@ -63,6 +75,9 @@ function open({ title, message, type, defaultValue = "", placeholder = "", confi
             if (type === "prompt") {
                 inputEl.focus();
                 inputEl.select();
+            } else if (type === "number") {
+                numberInputEl.focus();
+                numberInputEl.select();
             } else {
                 okBtn.focus();
             }
@@ -80,4 +95,8 @@ export function confirmDialog(message, title) {
 
 export function promptDialog(message, defaultValue, title, placeholder) {
     return open({ title, message, type: "prompt", defaultValue, placeholder, confirmText: "Valider", cancelText: "Annuler" });
+}
+
+export function numberDialog(message, defaultValue, title, { min, max } = {}) {
+    return open({ title, message, type: "number", defaultValue, min, max, confirmText: "Valider", cancelText: "Annuler" });
 }

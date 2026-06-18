@@ -1,4 +1,4 @@
-import { getBonusDef, eligibleTargets } from "./bonuses.js";
+import { getBonusDef, eligibleTargets, BONUS_CATALOG } from "./bonuses.js";
 import { canDrawToday } from "./game.js";
 import { AVATARS } from "./players.js";
 
@@ -8,8 +8,21 @@ const drawControlsEl = document.getElementById("draw-controls");
 const turnModalEl = document.getElementById("turn-modal");
 const turnContentEl = document.getElementById("turn-content");
 const logListEl = document.getElementById("log-list");
-const confettiLayerEl = document.getElementById("confetti-layer");
 const avatarPickerEl = document.getElementById("avatar-picker");
+const bonusCatalogListEl = document.getElementById("bonus-catalog-list");
+
+// Catalogue statique : ne depend pas de l'etat de la partie, rendu une seule fois.
+bonusCatalogListEl.innerHTML = BONUS_CATALOG.map(
+    (b) => `
+        <li class="peek-item">
+            <span>${esc(b.icon)}</span>
+            <span>
+                <strong>${esc(b.label)}</strong>${b.passive ? ` <em style="opacity:.7;">(passif)</em>` : ""}<br>
+                <span style="font-size:0.8rem;color:var(--ink-soft);">${esc(b.description)}</span>
+            </span>
+        </li>
+    `
+).join("");
 
 export function esc(str) {
     return String(str ?? "").replace(/[&<>"']/g, (c) => ({
@@ -77,6 +90,7 @@ function renderModal(state, ui) {
     const open = isModalOpen(state);
     const visible = open && !ui?.modalSuppressed;
     turnModalEl.classList.toggle("hidden", !visible);
+    turnModalEl.querySelector(".turn-card")?.classList.toggle("turn-card--victory", Boolean(state.winnerId));
     if (!open) {
         turnContentEl.innerHTML = "";
         return;
@@ -105,9 +119,16 @@ function renderPlayers(state) {
             if (isWinner) classes.push("player--winner");
             if (p.onVacation) classes.push("player--vacation");
 
+            const hasShield = p.bonuses.some((b) => b.id === "shield");
+            const isFrozen = Boolean(p.frozen);
+
             return `
                 <li class="${classes.join(" ")}" style="--player-color:${esc(p.color)}">
-                    <button class="player__avatar" type="button" data-action="change-avatar" data-player-id="${p.id}" title="Changer d'avatar">${esc(p.avatar)}</button>
+                    <span class="player__avatar-wrap">
+                        <button class="player__avatar" type="button" data-action="change-avatar" data-player-id="${p.id}" title="Changer d'avatar">${esc(p.avatar)}</button>
+                        ${hasShield ? `<span class="status-badge status-badge--shield" title="Protege par un bouclier"></span>` : ""}
+                        ${isFrozen ? `<span class="status-badge status-badge--frozen" title="Givre : passera son prochain tour"></span>` : ""}
+                    </span>
                     <span class="player__name">${esc(p.name)}${isWinner ? " 🏆" : ""}</span>
                     ${p.onVacation ? `<span class="vacation-tag" title="En vacances">🌴</span>` : ""}
                     <span class="player__score">${p.position}/${state.track.length}</span>
@@ -297,12 +318,18 @@ function resultMarkup(state, result) {
             swap: `${name} echange sa place avec ${target} !`,
             "send-back": `${name} renvoie ${target} au depart !`,
             sabotage: `${name} sabote ${target} (-2 cases) !`,
+            twister: `${name} declenche un Twister ! Toutes les positions sont redistribuees !`,
+            givre: `${name} givre ${target} : il/elle passera son prochain tour !`,
         }[result.bonusId] ?? `${name} utilise un bonus.`;
         return `<div class="result result--success"><span class="big">${esc(def?.icon ?? "⚡")}</span>${phrase}</div>`;
     }
 
     if (result.type === "vacation-skip") {
         return `<div class="result"><span class="big">🌴</span>${name} est en vacances : avance automatique d'une case. ${esc(result.substituteName)} prend la parole en premier !</div>`;
+    }
+
+    if (result.type === "frozen-skip") {
+        return `<div class="result result--fail"><span class="big">❄️</span>${name} est givre(e) et passe son tour !</div>`;
     }
 
     return "";
@@ -312,8 +339,14 @@ function renderTurn(state, ui) {
     if (state.winnerId) {
         const winner = state.players.find((p) => p.id === state.winnerId);
         turnContentEl.innerHTML = `
-            <div class="winner-banner">🏆 ${esc(winner?.name ?? "?")} remporte la course !</div>
-            <button class="ghost-btn ghost-btn--on-card" type="button" data-action="new-race" style="margin-top:14px;">🔁 Nouvelle course</button>
+            <div class="victory">
+                <div class="victory__sunburst"></div>
+                <div class="victory__trophy">🏆</div>
+                <div class="victory__avatar">${esc(winner?.avatar ?? "🎉")}</div>
+                <h2 class="victory__title">${esc(winner?.name ?? "?")}</h2>
+                <p class="victory__subtitle">remporte la course !</p>
+                <button class="dialog-btn dialog-btn--primary" type="button" data-action="new-race" style="margin-top:16px;">🔁 Nouvelle course</button>
+            </div>
         `;
         return;
     }
@@ -396,6 +429,10 @@ function logLine(state, entry) {
         const substitute = entry.substituteName ?? playerName(state, entry.substituteId);
         return `🌴 ${name} a ete tire au sort (en vacances, avance automatique). ${substitute} prend la parole en premier.`;
     }
+    if (entry.type === "frozen-skip") {
+        const name = entry.playerName ?? playerName(state, entry.playerId);
+        return `❄️ ${name} etait givre(e) et a passe son tour.`;
+    }
     if (entry.type === "turn") {
         const name = entry.playerName ?? playerName(state, entry.playerId);
         const r = entry.result;
@@ -413,6 +450,8 @@ function logLine(state, entry) {
         if (def?.id === "swap") return `🔀 ${owner} a echange sa place avec ${target}.`;
         if (def?.id === "send-back") return `⏪ ${owner} a renvoye ${target} au depart.`;
         if (def?.id === "sabotage") return `💣 ${owner} a saboté ${target} (-2).`;
+        if (def?.id === "twister") return `🌀 ${owner} a declenche un Twister (positions redistribuees).`;
+        if (def?.id === "givre") return `❄️ ${owner} a givre ${target}.`;
         return `${owner} a utilise un bonus.`;
     }
     return "";
@@ -496,16 +535,3 @@ export function closeAvatarPicker() {
     delete avatarPickerEl.dataset.playerId;
 }
 
-export function fireConfetti() {
-    const colors = ["#ff5d8f", "#fdcb6e", "#00b894", "#0984e3", "#a29bfe"];
-    for (let i = 0; i < 40; i++) {
-        const piece = document.createElement("div");
-        piece.className = "confetti-piece";
-        piece.style.left = `${Math.random() * 100}vw`;
-        piece.style.background = colors[Math.floor(Math.random() * colors.length)];
-        piece.style.animationDuration = `${1.6 + Math.random() * 1.4}s`;
-        piece.style.animationDelay = `${Math.random() * 0.4}s`;
-        confettiLayerEl.appendChild(piece);
-        setTimeout(() => piece.remove(), 3500);
-    }
-}

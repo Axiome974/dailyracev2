@@ -33,6 +33,7 @@ export function addPlayer(name) {
             position: 0,
             bonuses: [],
             onVacation: false,
+            frozen: false,
         };
 
         added = true;

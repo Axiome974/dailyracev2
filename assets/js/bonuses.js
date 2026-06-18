@@ -40,14 +40,52 @@ export const BONUS_CATALOG = [
         needsTarget: false,
         passive: true,
     },
+    {
+        id: "twister",
+        label: "Twister",
+        icon: "🌀",
+        description: "Redistribue aleatoirement les positions de tous les joueurs.",
+        needsTarget: false,
+    },
+    {
+        id: "givre",
+        label: "Givre",
+        icon: "❄️",
+        description: "Givre un adversaire : il passera son prochain tour.",
+        needsTarget: true,
+    },
 ];
 
 export function getBonusDef(id) {
     return BONUS_CATALOG.find((b) => b.id === id);
 }
 
+// Tirage pondere : state.bonusWeights associe un poids relatif a chaque id de
+// bonus (absent ou non defini = poids 1, valeur par defaut). Un poids de 0
+// retire completement le bonus du tirage, sans avoir a toucher au catalogue.
 export function drawRandomBonus() {
-    return BONUS_CATALOG[Math.floor(Math.random() * BONUS_CATALOG.length)];
+    const weights = getState().bonusWeights ?? {};
+    const pool = BONUS_CATALOG.map((b) => ({ b, w: weights[b.id] ?? 1 })).filter((x) => x.w > 0);
+    if (pool.length === 0) return BONUS_CATALOG[0];
+
+    const total = pool.reduce((sum, x) => sum + x.w, 0);
+    let r = Math.random() * total;
+    for (const x of pool) {
+        r -= x.w;
+        if (r <= 0) return x.b;
+    }
+    return pool[pool.length - 1].b;
+}
+
+export function setBonusWeight(bonusId, weight) {
+    setState((s) => ({
+        ...s,
+        bonusWeights: { ...s.bonusWeights, [bonusId]: weight },
+    }));
+}
+
+export function resetBonusWeights() {
+    setState((s) => ({ ...s, bonusWeights: {} }));
 }
 
 function clamp(pos, length) {
@@ -116,6 +154,18 @@ export function useBonus(ownerId, bonusUid, targetId) {
                     break;
                 case "boost":
                     players = players.map((p) => (p.id === ownerId ? { ...p, position: clamp(p.position + 2, length) } : p));
+                    break;
+                case "twister": {
+                    const positions = players.map((p) => p.position);
+                    for (let i = positions.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [positions[i], positions[j]] = [positions[j], positions[i]];
+                    }
+                    players = players.map((p, idx) => ({ ...p, position: positions[idx] }));
+                    break;
+                }
+                case "givre":
+                    players = players.map((p) => (p.id === targetId ? { ...p, frozen: true } : p));
                     break;
                 default:
                     break;

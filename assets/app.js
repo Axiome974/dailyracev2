@@ -1,10 +1,122 @@
 import { getState, setState, subscribe, exportStateString, importStateString } from "./js/state.js";
 import { addPlayer, removePlayer, toggleVacation, setAvatar } from "./js/players.js";
-import { drawPlayerOfTheDay, resolveAdvance, resolveMegaJump, resolveBonusChest, startNewRace } from "./js/game.js";
-import { useBonus } from "./js/bonuses.js";
-import { renderAll, fireConfetti, esc, toggleAvatarPicker, closeAvatarPicker, openTurnModal } from "./js/render.js";
+import {
+    drawPlayerOfTheDay,
+    resolveAdvance,
+    resolveMegaJump,
+    resolveBonusChest,
+    startNewRace,
+    setTrackLength,
+} from "./js/game.js";
+import { useBonus, BONUS_CATALOG, setBonusWeight, resetBonusWeights } from "./js/bonuses.js";
+import { renderAll, esc, toggleAvatarPicker, closeAvatarPicker, openTurnModal } from "./js/render.js";
 import { initRemote, claimPlayer } from "./js/remote.js";
 import { alertDialog, confirmDialog, promptDialog } from "./js/dialog.js";
+import { fireGrandFinale, preloadCelebration } from "./js/celebration.js";
+import { THEMES, getTheme, applyTheme, getMode, applyMode, initTheme } from "./js/theme.js";
+
+const FALLBACK_CONFETTI = ["#ff5d8f", "#fdcb6e", "#6c5ce7", "#00b894", "#0984e3", "#a29bfe"];
+const flashLayerEl = document.getElementById("flash-layer");
+const appEl = document.querySelector(".app");
+
+preloadCelebration();
+initTheme();
+
+function currentConfettiColors() {
+    return THEMES.find((t) => t.id === getTheme())?.confetti ?? FALLBACK_CONFETTI;
+}
+
+function renderModeToggle() {
+    const active = getMode();
+    document.querySelectorAll(".mode-toggle__btn").forEach((btn) => {
+        btn.classList.toggle("mode-toggle__btn--active", btn.dataset.mode === active);
+    });
+}
+
+function renderThemeSwatches() {
+    const container = document.getElementById("theme-swatches");
+    const active = getTheme();
+    container.innerHTML = THEMES.map(
+        (t) => `
+            <button class="theme-swatch${t.id === active ? " theme-swatch--active" : ""}" type="button" data-action="pick-theme" data-theme="${t.id}" style="background: linear-gradient(135deg, ${t.swatch[0]}, ${t.swatch[1]});" title="${t.label}">
+                <span class="theme-swatch__dot" style="background:${t.dot};"></span>
+                <span class="theme-swatch__label">${t.label}</span>
+            </button>
+        `
+    ).join("");
+}
+
+function renderBonusWeights() {
+    const container = document.getElementById("bonus-weights");
+    const weights = getState().bonusWeights ?? {};
+    container.innerHTML = BONUS_CATALOG.map((b) => {
+        const w = weights[b.id] ?? 1;
+        return `
+            <div class="bonus-weight-row${w <= 0 ? " bonus-weight-row--disabled" : ""}">
+                <span class="bonus-weight-row__icon">${esc(b.icon)}</span>
+                <span class="bonus-weight-row__label">${esc(b.label)}</span>
+                <input class="bonus-weight-row__input" type="number" min="0" max="10" step="1" value="${w}" data-bonus-id="${b.id}" />
+            </div>
+        `;
+    }).join("");
+}
+
+function setTrackFace(face) {
+    const flipEl = document.getElementById("track-flip");
+    const backLog = document.getElementById("back-log");
+    const backBonuses = document.getElementById("back-bonuses");
+    const journalBtn = document.querySelector('[data-action="flip-track-card"]');
+    const helpBtn = document.querySelector('[data-action="show-bonus-help"]');
+
+    if (face === "track") {
+        flipEl.classList.remove("is-flipped");
+    } else {
+        backLog.classList.toggle("hidden", face !== "log");
+        backBonuses.classList.toggle("hidden", face !== "bonuses");
+        flipEl.classList.add("is-flipped");
+    }
+
+    journalBtn.textContent = face === "log" ? "🏁" : "📖";
+    journalBtn.title = face === "log" ? "Revenir a la piste" : "Voir le journal de bord";
+    helpBtn.textContent = face === "bonuses" ? "🏁" : "❓";
+    helpBtn.title = face === "bonuses" ? "Revenir a la piste" : "Voir tous les bonus";
+}
+
+function currentTrackFace() {
+    const flipEl = document.getElementById("track-flip");
+    if (!flipEl.classList.contains("is-flipped")) return "track";
+    return document.getElementById("back-bonuses").classList.contains("hidden") ? "log" : "bonuses";
+}
+
+document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    ["settings-modal", "bonus-weights-modal"].forEach((id) => {
+        const modal = document.getElementById(id);
+        if (!modal.classList.contains("hidden")) {
+            modal.classList.add("hidden");
+        }
+    });
+});
+
+document.addEventListener("change", (e) => {
+    if (!e.target.matches(".bonus-weight-row__input")) return;
+    const raw = Math.round(Number(e.target.value));
+    const w = Number.isFinite(raw) ? Math.max(0, Math.min(10, raw)) : 1;
+    e.target.value = w;
+    setBonusWeight(e.target.dataset.bonusId, w);
+    e.target.closest(".bonus-weight-row")?.classList.toggle("bonus-weight-row--disabled", w <= 0);
+});
+
+function flashScreen() {
+    flashLayerEl.classList.remove("flash-active");
+    requestAnimationFrame(() => flashLayerEl.classList.add("flash-active"));
+}
+
+function shakeScreen() {
+    appEl.classList.remove("screen-shake");
+    requestAnimationFrame(() => appEl.classList.add("screen-shake"));
+    setTimeout(() => appEl.classList.remove("screen-shake"), 500);
+}
 
 const addPlayerForm = document.getElementById("add-player-form");
 const addPlayerInput = document.getElementById("add-player-input");
@@ -32,7 +144,9 @@ function render() {
     if (state.turn.phase !== "drawn") uiState.bonusPickerOpen = false;
     renderAll(state, uiState);
     if (state.winnerId && state.winnerId !== previousWinnerId) {
-        fireConfetti();
+        flashScreen();
+        shakeScreen();
+        fireGrandFinale(currentConfettiColors());
     }
     previousWinnerId = state.winnerId;
 }
@@ -137,6 +251,53 @@ document.addEventListener("click", async (e) => {
                 startNewRace();
             }
             break;
+        case "open-settings":
+            document.getElementById("settings-target").value = getState().track.length;
+            renderModeToggle();
+            renderThemeSwatches();
+            document.getElementById("settings-modal").classList.remove("hidden");
+            break;
+        case "open-bonus-weights":
+            renderBonusWeights();
+            document.getElementById("bonus-weights-modal").classList.remove("hidden");
+            break;
+        case "close-bonus-weights":
+            document.getElementById("bonus-weights-modal").classList.add("hidden");
+            break;
+        case "reset-weights":
+            resetBonusWeights();
+            renderBonusWeights();
+            break;
+        case "pick-mode":
+            applyMode(target.dataset.mode);
+            renderModeToggle();
+            break;
+        case "close-settings":
+            document.getElementById("settings-modal").classList.add("hidden");
+            break;
+        case "apply-target": {
+            const current = getState().track.length;
+            const raw = document.getElementById("settings-target").value;
+            const n = Math.round(Number(raw));
+            if (!Number.isFinite(n) || n < 3 || n > 50) {
+                await alertDialog("Choisis un nombre entier entre 3 et 50.", "Valeur invalide");
+                break;
+            }
+            if (n === current) break;
+            if (
+                await confirmDialog(
+                    `Objectif fixe a ${n}. La course va redemarrer (positions et bonus remis a zero).`,
+                    "Confirmer ?"
+                )
+            ) {
+                setTrackLength(n);
+            }
+            break;
+        }
+        case "pick-theme":
+            applyTheme(target.dataset.theme);
+            renderThemeSwatches();
+            break;
         case "export-session": {
             const code = exportStateString();
             navigator.clipboard?.writeText(code).catch(() => {});
@@ -174,13 +335,12 @@ document.addEventListener("click", async (e) => {
             claimPlayer(select?.value);
             break;
         }
-        case "flip-track-card": {
-            const flipEl = document.getElementById("track-flip");
-            const flipped = flipEl.classList.toggle("is-flipped");
-            target.textContent = flipped ? "🏁" : "📖";
-            target.title = flipped ? "Revenir a la piste" : "Voir le journal de bord";
+        case "flip-track-card":
+            setTrackFace(currentTrackFace() === "log" ? "track" : "log");
             break;
-        }
+        case "show-bonus-help":
+            setTrackFace(currentTrackFace() === "bonuses" ? "track" : "bonuses");
+            break;
         default:
             break;
     }

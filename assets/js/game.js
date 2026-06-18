@@ -26,6 +26,11 @@ export function drawPlayerOfTheDay() {
         return pick;
     }
 
+    if (pick.frozen) {
+        applyFrozenSkip(pick);
+        return pick;
+    }
+
     setState((s2) => ({
         ...s2,
         turn: { date: todayISO(), playerId: pick.id, phase: "drawn", lastResult: null },
@@ -71,6 +76,26 @@ function applyVacationSkip(pick, substitute) {
             ].slice(0, 30),
         };
     });
+}
+
+// Un joueur givre est toujours present (contrairement aux vacances) : il n'a
+// pas besoin de suppleant, il garde juste la parole au daily mais ne joue pas
+// son tour de course. Le gel se consomme automatiquement a ce tirage.
+function applyFrozenSkip(pick) {
+    setState((s) => ({
+        ...s,
+        players: s.players.map((p) => (p.id === pick.id ? { ...p, frozen: false } : p)),
+        turn: {
+            date: todayISO(),
+            playerId: pick.id,
+            phase: "resolved",
+            lastResult: { type: "frozen-skip" },
+        },
+        log: [
+            { id: crypto.randomUUID(), type: "frozen-skip", playerId: pick.id, playerName: pick.name },
+            ...s.log,
+        ].slice(0, 30),
+    }));
 }
 
 function applyTurn(compute) {
@@ -141,7 +166,19 @@ export function resolveBonusChest() {
 export function startNewRace() {
     setState((s) => ({
         ...s,
-        players: s.players.map((p) => ({ ...p, position: 0, bonuses: [] })),
+        players: s.players.map((p) => ({ ...p, position: 0, bonuses: [], frozen: false })),
+        winnerId: null,
+        turn: { date: null, playerId: null, phase: "idle", lastResult: null },
+    }));
+}
+
+// Changer l'objectif de la course n'a de sens qu'en redemarrant une course
+// (les positions deja jouees ne veulent plus rien dire avec un nouveau but).
+export function setTrackLength(length) {
+    setState((s) => ({
+        ...s,
+        track: { length },
+        players: s.players.map((p) => ({ ...p, position: 0, bonuses: [], frozen: false })),
         winnerId: null,
         turn: { date: null, playerId: null, phase: "idle", lastResult: null },
     }));
