@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Daily Race 🏁</title>
+    <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="app">
+    <header class="app__header">
+        <h1><span class="flag">🏁</span> <span class="title-text">Daily Race</span> <span class="flag">🏁</span></h1>
+        <p class="subtitle">Le tirage du daily devient une course jusqu'à 10 !</p>
+    </header>
+
+    <div id="claim-bar" class="card claim-bar hidden">
+        <p>🌐 Mode multijoueur actif — choisis quel joueur tu incarnes sur cet appareil :</p>
+        <div class="claim-bar__controls">
+            <label for="claim-select" class="sr-only">Choisir mon joueur</label>
+            <select id="claim-select"></select>
+            <button id="claim-btn" type="button" data-action="claim-player">C'est moi !</button>
+        </div>
+    </div>
+
+    <div class="board-row">
+        <section class="card scoreboard">
+            <div class="scoreboard__head">
+                <h2>Classement</h2>
+                <form id="add-player-form" class="add-player-form">
+                    <label for="add-player-input" class="sr-only">Nom du joueur</label>
+                    <input id="add-player-input" type="text" placeholder="Nom du joueur" maxlength="20" autocomplete="off" />
+                    <button type="submit">+ Ajouter</button>
+                </form>
+            </div>
+            <ul id="players-list" class="players-list"></ul>
+            <div id="draw-controls" class="scoreboard__controls"></div>
+            <button id="reset-race-btn" class="ghost-btn ghost-btn--on-card" type="button" data-action="new-race">🔁 Nouvelle course</button>
+            <div class="scoreboard__session">
+                <button class="ghost-btn ghost-btn--on-card" type="button" data-action="export-session">📤 Exporter</button>
+                <button class="ghost-btn ghost-btn--on-card" type="button" data-action="import-session">📥 Importer</button>
+            </div>
+        </section>
+
+        <section class="card track-card">
+            <div class="track-card__head">
+                <h2>Piste de course</h2>
+                <button class="flip-btn" type="button" data-action="flip-track-card" title="Voir le journal de bord">📖</button>
+            </div>
+            <div class="flip-card" id="track-flip">
+                <div class="flip-card__inner">
+                    <div class="flip-card__face flip-card__face--front">
+                        <div id="track" class="track"></div>
+                    </div>
+                    <div class="flip-card__face flip-card__face--back">
+                        <h3 class="flip-card__back-title">Journal de bord</h3>
+                        <ul id="log-list" class="log-list"></ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+<!--    <footer class="app__footer">-->
+<!--        <span id="sync-status" class="sync-status sync-status&#45;&#45;local">💾 Mode local</span>-->
+<!--    </footer>-->
+</div>
+
+<div id="turn-modal" class="modal-overlay hidden">
+    <div class="modal-overlay__backdrop"></div>
+    <section class="card turn-card modal-overlay__card">
+        <div id="turn-content"></div>
+    </section>
+</div>
+
+<div id="app-dialog" class="modal-overlay hidden">
+    <div class="modal-overlay__backdrop"></div>
+    <section class="card modal-overlay__card dialog-card">
+        <h3 id="dialog-title" class="dialog-title hidden"></h3>
+        <p id="dialog-message" class="dialog-message hidden"></p>
+        <textarea id="dialog-input" class="dialog-input hidden" rows="3"></textarea>
+        <div id="dialog-actions" class="dialog-actions"></div>
+    </section>
+</div>
+
+<div id="avatar-picker" class="avatar-picker hidden"></div>
+<div id="confetti-layer" class="confetti-layer"></div>
+
+<script src="assets/app.js" type="module"></script>
+</body>
+</html>
