@@ -1,5 +1,5 @@
 import { getBonusDef, eligibleTargets, BONUS_CATALOG } from "./bonuses.js";
-import { canDrawToday } from "./game.js";
+import { canDrawToday, DIE_BONUS_FACE } from "./game.js";
 import { AVATARS } from "./players.js";
 
 const boardEl = document.getElementById("board");
@@ -73,7 +73,7 @@ export function renderAll(state, ui) {
 }
 
 export function isModalOpen(state) {
-    return Boolean(state.winnerId) || state.turn.phase === "drawn" || state.turn.phase === "resolved";
+    return Boolean(state.winnerId) || ["drawn", "bonus-full", "resolved"].includes(state.turn.phase);
 }
 
 function renderGoal(state) {
@@ -248,7 +248,7 @@ function tilePlacement(i, cols, rows) {
 function moverHighlight(state) {
     if (state.turn.phase !== "resolved" || !state.turn.lastResult) return null;
     const r = state.turn.lastResult;
-    if (r.type === "advance") return { playerId: state.turn.playerId, cls: "success" };
+    if (r.type === "dice" || r.type === "advance") return { playerId: state.turn.playerId, cls: "success" };
     if (r.type === "megajump") return { playerId: state.turn.playerId, cls: r.success ? "success" : "fail" };
     return null;
 }
@@ -392,10 +392,75 @@ function drawRoad() {
     boardEl.prepend(svg);
 }
 
+/* ---------- De ---------- */
+
+function dieLabel(value) {
+    return value === DIE_BONUS_FACE ? "Dé : boîte surprise" : `Dé : ${value} case${value > 1 ? "s" : ""}`;
+}
+
+// De special a 4 faces : 1 a 3 (nombre de cases, avec un marquage de route)
+// ou boite cadeau. Une seule face visible a la fois via data-value.
+function dieSvg(value) {
+    const road = `<g class="road-mark"><path d="M38 71h24M41 76h18"/><path d="M50 65v13"/></g>`;
+    return `
+        <svg class="die-svg" id="die" viewBox="0 0 100 100" role="img" aria-label="${dieLabel(value)}" data-value="${value}">
+            <defs>
+                <linearGradient id="dieFace" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fffef7"/><stop offset=".5" stop-color="#f5efdf"/><stop offset="1" stop-color="#d2c9b8"/></linearGradient>
+                <linearGradient id="dieShine" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#fff" stop-opacity=".64"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+            </defs>
+            <rect x="5" y="5" width="90" height="90" rx="21" fill="#090f1b" opacity=".3" transform="translate(0 3)"/>
+            <rect x="4" y="3" width="92" height="92" rx="21" fill="url(#dieFace)" stroke="#fffdf4" stroke-width="2"/>
+            <rect x="8" y="7" width="84" height="84" rx="17" fill="none" stroke="#c5bdaf" stroke-opacity=".58"/>
+            <path d="M15 10 Q50 1 85 10 Q90 12 90 19 L90 27 Q52 17 10 29 L10 19 Q10 12 15 10Z" fill="url(#dieShine)"/>
+            <g class="special-face face-1"><text x="50" y="51" class="die-number">1</text>${road}</g>
+            <g class="special-face face-2"><text x="50" y="51" class="die-number">2</text>${road}</g>
+            <g class="special-face face-3"><text x="50" y="51" class="die-number">3</text>${road}</g>
+            <g class="special-face face-4"><path class="gift-ribbon" d="M50 40v34M32 51h36M34 51v24h32V51"/><path class="gift-bow" d="M50 49c-12-1-19-6-15-11 4-4 11 2 15 11Zm0 0c12-1 19-6 15-11-4-4-11 2-15 11Z"/></g>
+        </svg>
+    `;
+}
+
+export function setDieFace(dieEl, value) {
+    dieEl.dataset.value = String(value);
+    dieEl.setAttribute("aria-label", dieLabel(value));
+}
+
+function bonusRevealCard(bonus, note) {
+    return `
+        <div class="bonus-reveal">
+            <span class="bonus-reveal__icon">${esc(bonus.icon)}</span>
+            <strong>${esc(bonus.label)}</strong>
+            <p>${esc(bonus.description)}</p>
+            ${note ? `<p class="bonus-reveal__note">${note}</p>` : ""}
+        </div>
+    `;
+}
+
 /* ---------- Modale du tour ---------- */
 
 function resultView(state, result) {
     const name = esc(playerName(state, state.turn.playerId));
+
+    if (result.type === "dice") {
+        const plural = result.roll > 1 ? "S" : "";
+        return {
+            die: result.roll,
+            title: `+${result.roll} CASE${plural} <span>!</span>`,
+            desc: `${name} avance de ${result.delta} case${result.delta > 1 ? "s" : ""}.`,
+        };
+    }
+
+    if (result.type === "dice-bonus") {
+        let note = "🤫 Ce bonus rejoint ton inventaire secret (max 2). Tu pourras l'utiliser lors d'un prochain tirage.";
+        if (result.replaced) note = `🔁 Il remplace ${esc(result.replaced.icon)} ${esc(result.replaced.label)} dans ton inventaire.`;
+        if (result.discarded) note = "🗑️ Inventaire inchangé : ce bonus est laissé de côté.";
+        return {
+            die: result.roll,
+            title: `BOÎTE <span>SURPRISE !</span>`,
+            desc: `${name} gagne un bonus.`,
+            extra: bonusRevealCard(result.bonus, note),
+        };
+    }
 
     if (result.type === "advance") {
         return { icon: "➡️", title: `UNE CASE <span>DE PLUS !</span>`, desc: `${name} avance d'une case.` };
@@ -413,14 +478,7 @@ function resultView(state, result) {
             icon: "🎁",
             title: `CAISSE <span>OUVERTE !</span>`,
             desc: `${name} ouvre la caisse…`,
-            extra: `
-                <div class="bonus-reveal">
-                    <span class="bonus-reveal__icon">${esc(bonus.icon)}</span>
-                    <strong>${esc(bonus.label)}</strong>
-                    <p>${esc(bonus.description)}</p>
-                    <p class="bonus-reveal__note">🤫 Ce bonus rejoint ton inventaire secret (max 2). Tu pourras l'utiliser lors d'un prochain tirage, via le choix « ⚡ Utiliser un bonus ».</p>
-                </div>
-            `,
+            extra: bonusRevealCard(bonus),
         };
     }
 
@@ -492,40 +550,30 @@ function renderTurn(state, ui) {
     }
 
     if (state.turn.phase === "drawn") {
-        if (ui?.bonusPickerOpen && current.bonuses.length > 0) {
+        const usable = current.bonuses.filter((b) => !b.passive);
+        let step = ui?.turnStep ?? (usable.length > 0 ? "ask" : "roll");
+        if (usable.length === 0) step = "roll";
+
+        if (step === "pick") {
             turnContentEl.innerHTML = renderBonusPicker(current);
-            return null;
+        } else if (step === "ask") {
+            turnContentEl.innerHTML = renderBonusQuestion(current, usable);
+        } else {
+            turnContentEl.innerHTML = `
+                <div class="cap">DÉ DU CIRCUIT</div>
+                <h2>${esc(current.avatar)} ${esc(current.name)} <span>lance le dé !</span></h2>
+                <div class="dice-stage">
+                    ${dieSvg(1)}
+                    <div class="dice-rule">1 à 3 : avance du nombre indiqué · 🎁 : un bonus</div>
+                    <button class="primary" type="button" data-action="roll-die">🎲 JETER LE DÉ</button>
+                </div>
+            `;
         }
+        return null;
+    }
 
-        const bonusCount = current.bonuses.length;
-        const atCap = bonusCount >= 2;
-        const hasUsableBonus = current.bonuses.some((b) => !b.passive);
-
-        turnContentEl.innerHTML = `
-            <div class="cap">PILOTE DU JOUR</div>
-            <span class="reveal-avatar">${esc(current.avatar)}</span>
-            <h2>${esc(current.name)} <span>entre en piste !</span></h2>
-            <p>Choisis ton action. Chaque option peut changer la course.</p>
-            <div class="choices${hasUsableBonus ? " choices--four" : ""}">
-                <button class="choice choice--advance" type="button" data-action="advance">
-                    <span>➡️</span><b>AVANCER</b><small>+1 case sûre</small>
-                </button>
-                <button class="choice choice--mega" type="button" data-action="megajump">
-                    <span>🚀</span><b>MEGA JUMP</b><small>1/3 : +3 · sinon -2</small>
-                </button>
-                <button class="choice choice--bonus" type="button" data-action="bonus-chest" ${atCap ? "disabled" : ""}>
-                    <span>🎁</span><b>CAISSE BONUS</b><small>${atCap ? "Inventaire plein (2/2)" : "Bonus secret aléatoire"}</small>
-                </button>
-                ${
-                    hasUsableBonus
-                        ? `
-                <button class="choice choice--use-bonus" type="button" data-action="use-bonus-choice">
-                    <span>⚡</span><b>UTILISER UN BONUS</b><small>${bonusCount} en réserve</small>
-                </button>`
-                        : ""
-                }
-            </div>
-        `;
+    if (state.turn.phase === "bonus-full") {
+        turnContentEl.innerHTML = renderBonusReplace(current, state.turn.pendingBonus);
         return null;
     }
 
@@ -533,7 +581,7 @@ function renderTurn(state, ui) {
         const view = resultView(state, state.turn.lastResult);
         turnContentEl.innerHTML = `
             <div class="cap">RÉSULTAT DU TOUR</div>
-            <span class="reveal-avatar">${esc(view.icon)}</span>
+            ${view.die ? `<div class="dice-stage dice-stage--result">${dieSvg(view.die)}</div>` : `<span class="reveal-avatar">${esc(view.icon)}</span>`}
             <h2>${view.title}</h2>
             <p>${view.desc}</p>
             ${view.extra ?? ""}
@@ -591,6 +639,50 @@ function renderBonusPicker(player) {
     `;
 }
 
+function renderBonusQuestion(player, usable) {
+    return `
+        <div class="cap">PILOTE DU JOUR</div>
+        <span class="reveal-avatar">${esc(player.avatar)}</span>
+        <h2>${esc(player.name)} <span>entre en piste !</span></h2>
+        <p>Tu as ${usable.length} bonus activable${usable.length > 1 ? "s" : ""} en réserve : ${usable.map((b) => esc(b.icon)).join(" ")}</p>
+        <p class="yesno__question">Veux-tu utiliser un bonus ?</p>
+        <div class="yesno">
+            <button class="yesno__btn yesno__btn--yes" type="button" data-action="bonus-yes">
+                <span class="yesno__mark" aria-hidden="true">✓</span>
+                <b>OUI</b><small>Choisir un bonus</small>
+            </button>
+            <button class="yesno__btn yesno__btn--no" type="button" data-action="bonus-no">
+                <span class="yesno__mark" aria-hidden="true">✕</span>
+                <b>NON</b><small>Lancer le dé</small>
+            </button>
+        </div>
+    `;
+}
+
+function renderBonusReplace(player, bonus) {
+    return `
+        <div class="cap">INVENTAIRE PLEIN</div>
+        <div class="dice-stage dice-stage--result">${dieSvg(DIE_BONUS_FACE)}</div>
+        <h2>BOÎTE <span>SURPRISE !</span></h2>
+        ${bonus ? bonusRevealCard(bonus) : ""}
+        <p class="yesno__question">Ton inventaire est plein (2/2). Remplacer un bonus ?</p>
+        <ul class="peek-list peek-list--reveal">
+            ${player.bonuses
+                .map(
+                    (b) => `
+                <li class="peek-item">
+                    <span class="peek-item__icon">${esc(b.icon)}</span>
+                    <span><strong>${esc(b.label ?? "Bonus")}</strong>${b.passive ? " <em>(passif)</em>" : ""}</span>
+                    <button class="target-btn" type="button" data-action="replace-bonus" data-bonus-uid="${esc(b.uid)}" style="margin-left:auto;">Remplacer</button>
+                </li>
+            `
+                )
+                .join("")}
+        </ul>
+        <button class="ghost-btn resultbtn" type="button" data-action="keep-bonuses">Garder mes bonus</button>
+    `;
+}
+
 /* ---------- Journal ---------- */
 
 function renderLog(state) {
@@ -634,6 +726,14 @@ function logEvent(state, entry) {
     if (entry.type === "turn") {
         const name = entry.playerName ?? playerName(state, entry.playerId);
         const r = entry.result;
+        if (r.type === "dice") {
+            return { icon: "🎲", text: `${name} a lancé le dé : ${r.roll}.`, kind: `+${r.delta} case${r.delta > 1 ? "s" : ""}` };
+        }
+        if (r.type === "dice-bonus") {
+            if (r.discarded) return { icon: "🎁", text: `${name} a gagné une boîte surprise, mais a gardé ses bonus.`, kind: "Dé : boîte surprise" };
+            if (r.replaced) return { icon: "🎁", text: `${name} a gagné une boîte surprise et a remplacé un bonus.`, kind: "Dé : boîte surprise" };
+            return { icon: "🎁", text: `${name} a gagné une boîte surprise.`, kind: "Dé : boîte surprise" };
+        }
         if (r.type === "advance") return { icon: "➡️", text: `${name} a avancé d'une case.`, kind: "+1 case" };
         if (r.type === "megajump") {
             return r.success

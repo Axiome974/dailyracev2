@@ -2,14 +2,15 @@ import { getState, setState, subscribe, exportStateString, importStateString } f
 import { addPlayer, removePlayer, toggleVacation, setAvatar } from "./js/players.js";
 import {
     drawPlayerOfTheDay,
-    resolveAdvance,
-    resolveMegaJump,
-    resolveBonusChest,
+    rollDie,
+    resolveDiceRoll,
+    resolveBonusReplace,
+    DIE_BONUS_FACE,
     startNewRace,
     setTrackLength,
 } from "./js/game.js";
 import { useBonus, BONUS_CATALOG, setBonusWeight, resetBonusWeights } from "./js/bonuses.js";
-import { renderAll, esc, toggleAvatarPicker, closeAvatarPicker, openTurnModal, renderSpinFrame } from "./js/render.js";
+import { renderAll, esc, toggleAvatarPicker, closeAvatarPicker, openTurnModal, renderSpinFrame, setDieFace } from "./js/render.js";
 import { initRemote, claimPlayer } from "./js/remote.js";
 import { alertDialog, confirmDialog, promptDialog } from "./js/dialog.js";
 import { fireGrandFinale, preloadCelebration } from "./js/celebration.js";
@@ -69,7 +70,9 @@ const addPlayerForm = document.getElementById("add-player-form");
 const addPlayerInput = document.getElementById("add-player-input");
 
 let previousWinnerId = null;
-const uiState = { bonusPickerOpen: false, modalSuppressed: false };
+// turnStep : etape locale du tour "drawn" ("ask" = veut-il utiliser un bonus,
+// "pick" = choix du bonus/cible, "roll" = lancer du de). null = etape par defaut.
+const uiState = { turnStep: null, modalSuppressed: false };
 
 // Masque la modale le temps que l'animation du pion (deplacement sur le
 // plateau) se joue derriere, puis la rouvre avec le resultat.
@@ -87,7 +90,7 @@ function resolveWithBoardReveal(resolveFn) {
 
 function render() {
     const state = getState();
-    if (state.turn.phase !== "drawn") uiState.bonusPickerOpen = false;
+    if (state.turn.phase !== "drawn") uiState.turnStep = null;
     renderAll(state, uiState);
     if (state.winnerId && state.winnerId !== previousWinnerId) {
         flashScreen();
@@ -134,16 +137,35 @@ function playDrawAnimation() {
     tick();
 }
 
-function playChoiceCharge(btnEl, chargeClass, resolveFn, delay, { reveal = false } = {}) {
-    document.querySelectorAll(".choice").forEach((b) => (b.disabled = true));
-    btnEl.classList.add(chargeClass);
+function setTurnStep(step) {
+    uiState.turnStep = step;
+    render();
+}
+
+const DIE_ROLL_DURATION = 1250;
+const DIE_SETTLE_DELAY = 650;
+
+// Le resultat est tire des le clic, l'animation ne fait que "chercher" la
+// face avant de s'y arreter ; l'etat n'est modifie qu'une fois le de pose.
+function playDieRoll(btnEl) {
+    const dieEl = document.getElementById("die");
+    if (!dieEl) return;
+    btnEl.disabled = true;
+    const roll = rollDie();
+    dieEl.classList.add("is-rolling");
+    const interval = setInterval(() => setDieFace(dieEl, 1 + Math.floor(Math.random() * DIE_BONUS_FACE)), 75);
     setTimeout(() => {
-        if (reveal) {
-            resolveWithBoardReveal(resolveFn);
-        } else {
-            resolveFn();
-        }
-    }, delay);
+        clearInterval(interval);
+        setDieFace(dieEl, roll);
+        dieEl.classList.remove("is-rolling");
+        setTimeout(() => {
+            if (roll === DIE_BONUS_FACE) {
+                resolveDiceRoll(roll);
+            } else {
+                resolveWithBoardReveal(() => resolveDiceRoll(roll));
+            }
+        }, DIE_SETTLE_DELAY);
+    }, DIE_ROLL_DURATION);
 }
 
 document.addEventListener("click", async (e) => {
@@ -159,22 +181,23 @@ document.addEventListener("click", async (e) => {
         case "draw":
             playDrawAnimation();
             break;
-        case "advance":
-            playChoiceCharge(target, "choice--charging-advance", resolveAdvance, 450, { reveal: true });
+        case "bonus-yes":
+            setTurnStep("pick");
             break;
-        case "megajump":
-            playChoiceCharge(target, "choice--charging-mega", resolveMegaJump, 650, { reveal: true });
-            break;
-        case "bonus-chest":
-            playChoiceCharge(target, "choice--charging-bonus", resolveBonusChest, 550);
-            break;
-        case "use-bonus-choice":
-            uiState.bonusPickerOpen = true;
-            render();
+        case "bonus-no":
+            setTurnStep("roll");
             break;
         case "cancel-bonus-picker":
-            uiState.bonusPickerOpen = false;
-            render();
+            setTurnStep("ask");
+            break;
+        case "roll-die":
+            playDieRoll(target);
+            break;
+        case "replace-bonus":
+            resolveBonusReplace(target.dataset.bonusUid);
+            break;
+        case "keep-bonuses":
+            resolveBonusReplace(null);
             break;
         case "use-bonus":
             resolveWithBoardReveal(() =>

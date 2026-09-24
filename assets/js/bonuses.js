@@ -105,9 +105,9 @@ export function eligibleTargets(ownerId) {
     return s.players.filter((p) => p.id !== ownerId && p.id !== s.winnerId && !p.onVacation);
 }
 
-// Utiliser un bonus est le 4eme choix du tour : seul le joueur tire au sort
-// peut jouer un de ses bonus actifs, et uniquement pendant la phase "drawn"
-// (avant d'avoir choisi une des 4 actions). Les bonus passifs (bouclier) ne
+// Utiliser un bonus remplace le lancer de de du tour : seul le joueur tire au
+// sort peut jouer un de ses bonus actifs, et uniquement pendant la phase
+// "drawn" (avant d'avoir lance le de). Les bonus passifs (bouclier) ne
 // passent jamais par ici, ils se declenchent automatiquement en defense.
 export function useBonus(ownerId, bonusUid, targetId) {
     setState((s) => {

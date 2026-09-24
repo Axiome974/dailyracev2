@@ -1435,95 +1435,181 @@ textarea.field {
     75% { transform: translateX(6px); }
 }
 
-.choices {
+.yesno__question {
+    margin-top: 18px !important;
+    color: #fff !important;
+    font-weight: 800;
+    font-size: 15px !important;
+}
+
+.yesno {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 9px;
-    margin-top: 23px;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-top: 16px;
 }
 
-.choices--four {
-    grid-template-columns: repeat(4, 1fr);
-}
-
-.choice {
+.yesno__btn {
+    --tone: var(--accent);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 18px 10px 16px;
     border: 1px solid #ffffff25;
+    border-radius: 18px;
     background: #ffffff0c;
     color: #fff;
-    border-radius: 14px;
-    min-height: 100px;
-    padding: 12px 5px;
-    transition: background .2s, transform .2s, border-color .2s;
+    transition: background .2s, border-color .2s, transform .2s;
 }
 
-.choice:hover:not(:disabled) {
-    background: #d9ff4322;
+.yesno__btn--yes {
+    --tone: #3ee07a;
+}
+
+.yesno__btn--no {
+    --tone: #ff5d5d;
+}
+
+.yesno__btn:hover {
     transform: translateY(-3px);
-    border-color: var(--accent);
+    border-color: var(--tone);
+    background: color-mix(in srgb, var(--tone) 16%, transparent);
 }
 
-.choice--mega:hover:not(:disabled) {
-    background: #ffab6422;
-    border-color: #ffab64;
+.yesno__mark {
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 64px;
+    margin-bottom: 6px;
+    border-radius: 50%;
+    background: var(--tone);
+    color: #0b1320;
+    font-size: 36px;
+    font-weight: 900;
+    line-height: 1;
+    box-shadow: 0 6px 0 color-mix(in srgb, var(--tone) 60%, #000), 0 12px 26px color-mix(in srgb, var(--tone) 35%, transparent);
+    transition: transform .2s;
 }
 
-.choice--use-bonus:hover:not(:disabled) {
-    background: #ffd97022;
-    border-color: var(--gold);
+.yesno__btn:hover .yesno__mark {
+    transform: scale(1.08);
 }
 
-.choice span {
-    display: block;
-    font-size: 25px;
-    margin-bottom: 4px;
+.yesno__btn b {
+    font: 900 22px var(--display);
+    letter-spacing: .06em;
 }
 
-.choice b {
+.yesno__btn small {
+    color: #a8b5cf;
+    font-size: 11px;
+}
+
+/* De special a 4 faces : 1 a 3 cases ou boite cadeau */
+.dice-stage {
+    display: grid;
+    justify-items: center;
+    gap: 15px;
+    margin: 20px 0 6px;
+}
+
+.dice-stage--result {
+    margin: 18px 0 4px;
+}
+
+.dice-stage .primary {
+    width: min(100%, 270px);
+}
+
+.dice-rule {
+    color: #dbe9c0;
+    font-weight: 800;
     font-size: 12px;
 }
 
-.choice small {
+.die-svg {
     display: block;
-    color: #a8b5cf;
-    font-size: 10px;
-    margin-top: 3px;
+    width: 112px;
+    height: 112px;
+    overflow: visible;
+    filter: drop-shadow(0 9px 11px #0008);
+    transform: perspective(500px) rotateX(7deg) rotateZ(-8deg);
+    transform-origin: center;
 }
 
-.choice--charging-advance {
-    animation: charge-hop .45s ease;
-    pointer-events: none;
+.die-svg.is-rolling {
+    animation: die-roll .14s ease-in-out infinite alternate;
+    filter: drop-shadow(0 15px 13px #0009);
 }
 
-.choice--charging-mega {
-    animation: charge-shake .65s ease;
-    pointer-events: none;
+@keyframes die-roll {
+    from { transform: perspective(500px) rotateX(-15deg) rotateZ(-24deg) translate(-5px, 2px); }
+    to { transform: perspective(500px) rotateX(20deg) rotateZ(19deg) translate(5px, -7px); }
 }
 
-.choice--charging-bonus {
-    animation: charge-wiggle .55s ease;
-    pointer-events: none;
+.dice-stage--result .die-svg {
+    animation: die-land .5s cubic-bezier(.34, 1.56, .64, 1);
 }
 
-.choice[class*="--charging-"] {
-    opacity: 1;
-    border-color: var(--accent);
-    background: #d9ff4330;
+@keyframes die-land {
+    from { transform: perspective(500px) rotateZ(-40deg) scale(.6); opacity: 0; }
 }
 
-@keyframes charge-hop {
-    50% { transform: translateY(-12px); }
+.die-svg .special-face {
+    display: none;
 }
 
-@keyframes charge-shake {
-    20% { transform: translate(-4px, -2px) rotate(-3deg); }
-    40% { transform: translate(4px, -5px) rotate(3deg); }
-    60% { transform: translate(-4px, -8px) rotate(-3deg); }
-    80% { transform: translate(4px, -10px) rotate(3deg); }
+.die-svg[data-value="1"] .face-1,
+.die-svg[data-value="2"] .face-2,
+.die-svg[data-value="3"] .face-3,
+.die-svg[data-value="4"] .face-4 {
+    display: block;
 }
 
-@keyframes charge-wiggle {
-    25% { transform: rotate(-10deg) scale(1.08); }
-    75% { transform: rotate(10deg) scale(1.08); }
+.die-svg .die-number {
+    font-family: Impact, 'Barlow Condensed', sans-serif;
+    font-size: 43px;
+    font-weight: 900;
+    text-anchor: middle;
+    dominant-baseline: middle;
+    fill: #202e41;
+    paint-order: stroke;
+    stroke: #fff8;
+    stroke-width: .8px;
+}
+
+.die-svg .road-mark {
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.die-svg .road-mark path:first-child {
+    stroke: #293c52;
+    stroke-width: 6;
+}
+
+.die-svg .road-mark path:last-child {
+    stroke: #e2ffad;
+    stroke-width: 2;
+    stroke-dasharray: 2 4;
+}
+
+.die-svg .gift-ribbon {
+    fill: none;
+    stroke: #d64d57;
+    stroke-width: 6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.die-svg .gift-bow {
+    fill: #ffcc55;
+    stroke: #ad7531;
+    stroke-width: 2;
+    stroke-linejoin: round;
 }
 
 .resultbtn {
@@ -1871,26 +1957,15 @@ textarea.field {
         font-size: 40px;
     }
 
-    .choices,
-    .choices--four {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 6px;
+    .yesno__mark {
+        width: 54px;
+        height: 54px;
+        font-size: 30px;
     }
 
-    .choices:not(.choices--four) .choice:last-child {
-        grid-column: 1 / -1;
-    }
-
-    .choice {
-        min-height: 88px;
-    }
-
-    .choice b {
-        font-size: 11px;
-    }
-
-    .choice small {
-        font-size: 9px;
+    .die-svg {
+        width: 100px;
+        height: 100px;
     }
 
     .reveal--victory #turn-content {

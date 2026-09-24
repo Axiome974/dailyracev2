@@ -98,13 +98,30 @@ function applyFrozenSkip(pick) {
     }));
 }
 
+function turnLogEntry(s, player, result) {
+    return {
+        id: crypto.randomUUID(),
+        type: "turn",
+        playerId: player.id,
+        playerName: player.name,
+        date: s.turn.date,
+        result,
+    };
+}
+
 function applyTurn(compute) {
     setState((s) => {
         if (s.turn.phase !== "drawn") return s;
         const player = s.players.find((p) => p.id === s.turn.playerId);
         if (!player) return s;
 
-        const { position, result, grantedBonus } = compute(s, player);
+        const { position, result, grantedBonus, pendingBonus } = compute(s, player);
+
+        // Inventaire plein : le tour reste en suspens le temps que le joueur
+        // choisisse de remplacer un de ses bonus ou de garder les siens.
+        if (pendingBonus) {
+            return { ...s, turn: { ...s.turn, phase: "bonus-full", pendingBonus } };
+        }
 
         let players = s.players.map((p) => (p.id === player.id ? { ...p, position } : p));
         if (grantedBonus) {
@@ -122,44 +139,69 @@ function applyTurn(compute) {
             players,
             winnerId: winner ? winner.id : s.winnerId,
             turn: { ...s.turn, phase: "resolved", lastResult: result },
-            log: [
-                {
-                    id: crypto.randomUUID(),
-                    type: "turn",
-                    playerId: player.id,
-                    playerName: player.name,
-                    date: s.turn.date,
-                    result,
-                },
-                ...s.log,
-            ].slice(0, 30),
+            log: [turnLogEntry(s, player, result), ...s.log].slice(0, 30),
         };
     });
 }
 
-export function resolveAdvance() {
-    applyTurn((s, player) => {
-        const position = clamp(player.position + 1, s.track.length);
-        return { position, result: { type: "advance", delta: position - player.position } };
-    });
+// De a 4 faces : 1 a 3 = nombre de cases a avancer, 4 = boite surprise (bonus).
+export const DIE_BONUS_FACE = 4;
+
+export function rollDie() {
+    return 1 + Math.floor(Math.random() * DIE_BONUS_FACE);
 }
 
-export function resolveMegaJump() {
+export function resolveDiceRoll(roll) {
     applyTurn((s, player) => {
-        const success = Math.random() < 1 / 3;
-        const raw = success ? 3 : -2;
-        const position = clamp(player.position + raw, s.track.length);
-        return { position, result: { type: "megajump", success, delta: position - player.position } };
-    });
-}
-
-export function resolveBonusChest() {
-    applyTurn((s, player) => {
-        if (player.bonuses.length >= MAX_BONUSES) {
-            return { position: player.position, result: { type: "bonus-full" } };
+        if (roll !== DIE_BONUS_FACE) {
+            const position = clamp(player.position + roll, s.track.length);
+            return { position, result: { type: "dice", roll, delta: position - player.position } };
         }
         const bonus = drawRandomBonus();
-        return { position: player.position, result: { type: "bonus", bonus }, grantedBonus: bonus };
+        if (player.bonuses.length >= MAX_BONUSES) {
+            return { position: player.position, pendingBonus: bonus };
+        }
+        return { position: player.position, result: { type: "dice-bonus", roll, bonus }, grantedBonus: bonus };
+    });
+}
+
+// replaceUid = uid du bonus a remplacer par le bonus gagne, ou null pour
+// garder l'inventaire actuel (le bonus gagne est alors perdu).
+export function resolveBonusReplace(replaceUid) {
+    setState((s) => {
+        if (s.turn.phase !== "bonus-full" || !s.turn.pendingBonus) return s;
+        const player = s.players.find((p) => p.id === s.turn.playerId);
+        if (!player) return s;
+
+        const bonus = s.turn.pendingBonus;
+        const replaced = replaceUid ? player.bonuses.find((b) => b.uid === replaceUid) : null;
+        const players = replaced
+            ? s.players.map((p) =>
+                  p.id === player.id
+                      ? {
+                            ...p,
+                            bonuses: p.bonuses.map((b) =>
+                                b.uid === replaceUid ? { ...bonus, uid: crypto.randomUUID() } : b
+                            ),
+                        }
+                      : p
+              )
+            : s.players;
+
+        const result = {
+            type: "dice-bonus",
+            roll: DIE_BONUS_FACE,
+            bonus,
+            replaced: replaced ? { id: replaced.id, label: replaced.label, icon: replaced.icon } : null,
+            discarded: !replaced,
+        };
+
+        return {
+            ...s,
+            players,
+            turn: { ...s.turn, phase: "resolved", lastResult: result, pendingBonus: null },
+            log: [turnLogEntry(s, player, result), ...s.log].slice(0, 30),
+        };
     });
 }
 
