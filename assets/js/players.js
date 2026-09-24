@@ -34,6 +34,7 @@ export function addPlayer(name) {
             bonuses: [],
             onVacation: false,
             frozen: false,
+            shielded: false,
         };
 
         added = true;

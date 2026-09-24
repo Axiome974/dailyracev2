@@ -1,8 +1,15 @@
-const STORAGE_KEY = "daily-rope-state-v1";
+// Etat de la partie, en memoire. La persistance (localStorage en demo,
+// serveur en mode connecte) est branchee au demarrage par initState() :
+// voir js/storage.js. Ce module n'en connait pas les details.
 const TRACK_LENGTH = 10;
 
-function defaultState() {
+// Version du format de l'etat, stockee avec lui : permettra de migrer les
+// anciennes parties au chargement le jour ou le format change.
+export const SCHEMA_VERSION = 1;
+
+export function defaultState() {
     return {
+        schemaVersion: SCHEMA_VERSION,
         players: [],
         track: { length: TRACK_LENGTH },
         turn: { date: null, playerId: null, phase: "idle", lastResult: null },
@@ -13,18 +20,22 @@ function defaultState() {
     };
 }
 
-function load() {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) return { ...defaultState(), ...JSON.parse(raw) };
-    } catch (err) {
-        console.warn("Etat local illisible, reinitialisation.", err);
-    }
-    return defaultState();
+// Complete un etat charge (ou vide/illisible) avec les valeurs par defaut.
+export function normalizeState(raw) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return defaultState();
+    return { ...defaultState(), ...raw, schemaVersion: SCHEMA_VERSION };
 }
 
-let state = load();
+let state = defaultState();
+let persist = () => {};
 const listeners = new Set();
+
+// initial : etat charge par le stockage (null = nouvelle partie) ;
+// persistFn(state) : appelee a chaque modification.
+export function initState(initial, persistFn) {
+    state = normalizeState(initial);
+    persist = persistFn;
+}
 
 export function getState() {
     return state;
@@ -32,11 +43,7 @@ export function getState() {
 
 export function setState(updater) {
     state = typeof updater === "function" ? updater(state) : updater;
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (err) {
-        console.warn("Impossible de sauvegarder l'etat.", err);
-    }
+    persist(state);
     listeners.forEach((fn) => fn(state));
 }
 
@@ -87,5 +94,5 @@ export function importStateString(code) {
         throw new Error("Format de session invalide");
     }
 
-    setState({ ...defaultState(), ...parsed });
+    setState(normalizeState(parsed));
 }

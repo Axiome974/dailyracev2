@@ -1,3 +1,8 @@
+<!--
+    Version autonome du jeu (mode hors connexion, localStorage), servie
+    depuis la racine du dépôt. Copie de daily-race/templates/game/play.html.twig
+    et de daily-race/public/game/ : c'est là-bas que le jeu évolue désormais.
+-->
 <!doctype html>
 <html lang="fr">
 <head>
@@ -22,32 +27,24 @@
             </div>
         </div>
         <div class="topright">
-            <span id="sync-status" class="pill sync-status--local"><i></i> MODE LOCAL</span>
+            <span id="sync-status" class="pill sync-status--local"><i></i> HORS CONNEXION</span>
+            <button class="iconbtn" id="sound-btn" type="button" data-action="toggle-sound" title="Couper le son" aria-label="Couper le son">🔊</button>
             <button class="iconbtn" type="button" data-action="new-race" title="Nouvelle course" aria-label="Nouvelle course">🔁</button>
             <button class="iconbtn" type="button" data-action="open-settings" title="Réglages" aria-label="Réglages">⚙️</button>
-            <button class="iconbtn" type="button" data-action="open-bonus-weights" title="Probabilité des bonus" aria-label="Probabilité des bonus">🎲</button>
+            <button class="iconbtn" type="button" data-action="open-bonus-weights" title="Taux d'apparition des bonus et malus" aria-label="Taux d'apparition des bonus et malus">🎲</button>
             <button class="iconbtn" type="button" data-action="export-session" title="Exporter" aria-label="Exporter la session">📤</button>
             <button class="iconbtn" type="button" data-action="import-session" title="Importer" aria-label="Importer une session">📥</button>
-            <button class="iconbtn" type="button" data-action="show-bonus-help" title="Voir tous les bonus" aria-label="Voir tous les bonus">❓</button>
+            <button class="iconbtn" type="button" data-action="show-bonus-help" title="Bonus et malus" aria-label="Voir les bonus et malus">❓</button>
         </div>
     </header>
 
-    <div class="heading">
-        <div>
-            <div class="eyebrow">⚡ LA GRILLE EST OUVERTE</div>
-            <h1>À QUI LE <em>TOUR ?</em></h1>
-        </div>
-        <p class="sub">Un tirage, un bonus ou un coup de dé, et le classement peut basculer. Tout se joue maintenant.</p>
-    </div>
-
-    <div id="claim-bar" class="panel claim-bar hidden">
-        <p>🌐 Mode multijoueur actif — choisis quel joueur tu incarnes sur cet appareil :</p>
-        <div class="claim-bar__controls">
-            <label for="claim-select" class="sr-only">Choisir mon joueur</label>
-            <select id="claim-select"></select>
-            <button id="claim-btn" class="primary primary--small" type="button" data-action="claim-player">C'est moi !</button>
-        </div>
-    </div>
+<!--    <div class="heading">-->
+<!--        <div>-->
+<!--            <div class="eyebrow" id="heading-eyebrow">⚡ LA GRILLE EST OUVERTE</div>-->
+<!--            <h1 id="heading-title">À QUI LE <em>TOUR ?</em></h1>-->
+<!--        </div>-->
+<!--        <p class="sub" id="heading-sub">Un tirage, un bonus ou un coup de dé, et le classement peut basculer. Tout se joue maintenant.</p>-->
+<!--    </div>-->
 
     <div class="layout">
         <div class="left">
@@ -79,7 +76,10 @@
 
         <aside class="aside">
             <section class="panel standings">
-                <div class="draw-box" id="draw-controls"></div>
+                <div class="draw-box" id="turn-console" aria-live="polite">
+                    <div class="confetti" id="console-confetti"></div>
+                    <div id="draw-controls"></div>
+                </div>
                 <div class="side-title"><h2>LE PODIUM</h2><span>🏆 TOP 3</span></div>
                 <div class="podium" id="podium"></div>
                 <div class="info-strip">⚡ <strong>Le suspense est réel.</strong><br>Un coup de dé ou un bonus peut tout changer.</div>
@@ -123,17 +123,35 @@
                 <button class="primary primary--small" type="button" data-action="apply-target">Appliquer</button>
             </div>
         </div>
+        <div class="settings-section">
+            <p class="settings-label">✨ Cases spéciales</p>
+            <p id="settings-tiles-hint" class="settings-hint settings-hint--spaced"></p>
+            <div class="tiles-grid">
+                <span class="tiles-grid__kind">⚡ Bonus</span>
+                <label for="settings-bonus-min" class="settings-mini-label">Min</label>
+                <input id="settings-bonus-min" class="field" type="number" min="0" />
+                <label for="settings-bonus-max" class="settings-mini-label">Max</label>
+                <input id="settings-bonus-max" class="field" type="number" min="0" />
+                <span class="tiles-grid__kind">☠️ Malus</span>
+                <label for="settings-malus-min" class="settings-mini-label">Min</label>
+                <input id="settings-malus-min" class="field" type="number" min="0" />
+                <label for="settings-malus-max" class="settings-mini-label">Max</label>
+                <input id="settings-malus-max" class="field" type="number" min="0" />
+            </div>
+            <button class="primary primary--small tiles-apply" type="button" data-action="apply-tile-effects">Appliquer</button>
+        </div>
+        <button class="ghost-btn ghost-btn--block" type="button" data-action="open-debug">🛠️ Menu debug</button>
         <button class="ghost-btn ghost-btn--block" type="button" data-action="close-settings">Fermer</button>
     </section>
 </div>
 
 <div id="bonus-weights-modal" class="overlay hidden">
     <div class="overlay__backdrop" data-action="close-bonus-weights"></div>
-    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="bonus-weights-title">
-        <h3 id="bonus-weights-title" class="sheet__title">🎲 Probabilité des bonus</h3>
+    <section class="sheet sheet--wide" role="dialog" aria-modal="true" aria-labelledby="bonus-weights-title">
+        <h3 id="bonus-weights-title" class="sheet__title">🎲 Taux d'apparition</h3>
         <div class="settings-section">
             <div class="settings-label-row">
-                <p class="settings-hint">0 = bonus désactivé, plus c'est élevé, plus il est fréquent.</p>
+                <p class="settings-hint">Plus la barre est haute, plus c'est fréquent (0 = jamais). Coche où chaque effet peut apparaître. Appliqué à la prochaine redistribution du plateau (fin du tour en cours).</p>
                 <button class="ghost-btn" type="button" data-action="reset-weights">Réinitialiser</button>
             </div>
             <div id="bonus-weights" class="bonus-weights"></div>
@@ -142,16 +160,31 @@
     </section>
 </div>
 
+<div id="debug-modal" class="overlay hidden">
+    <div class="overlay__backdrop" data-action="close-debug"></div>
+    <section class="sheet sheet--wide" role="dialog" aria-modal="true" aria-labelledby="debug-title">
+        <h3 id="debug-title" class="sheet__title">🛠️ Menu debug</h3>
+        <p class="settings-hint settings-hint--spaced">Modifications immédiates, sans passer par les règles du jeu.</p>
+        <div id="debug-list" class="debug-list"></div>
+        <div class="debug-actions">
+            <button class="ghost-btn" type="button" data-action="debug-redraw-board">🔄 Redistribuer les cases</button>
+            <button class="ghost-btn" type="button" data-action="debug-reset-turn">⏹️ Réinitialiser le tour en cours</button>
+        </div>
+        <button class="ghost-btn ghost-btn--block" type="button" data-action="close-debug">Fermer</button>
+    </section>
+</div>
+
 <div id="bonus-catalog-modal" class="overlay hidden">
     <div class="overlay__backdrop" data-action="close-bonus-catalog"></div>
     <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="bonus-catalog-title">
-        <h3 id="bonus-catalog-title" class="sheet__title">❓ Tous les bonus</h3>
+        <h3 id="bonus-catalog-title" class="sheet__title">❓ Bonus &amp; malus</h3>
         <ul id="bonus-catalog-list" class="peek-list"></ul>
         <button class="ghost-btn ghost-btn--block" type="button" data-action="close-bonus-catalog">Fermer</button>
     </section>
 </div>
 
 <div id="avatar-picker" class="avatar-picker hidden"></div>
+<div id="inventory-popover" class="inventory-popover hidden" role="dialog" aria-label="Inventaire du joueur"></div>
 <div id="flash-layer"></div>
 
 <script src="assets/app.js" type="module"></script>
