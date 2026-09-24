@@ -4,7 +4,7 @@ const messageEl = document.getElementById("dialog-message");
 const inputEl = document.getElementById("dialog-input");
 const numberInputEl = document.getElementById("dialog-number-input");
 const actionsEl = document.getElementById("dialog-actions");
-const backdropEl = dialogEl.querySelector(".modal-overlay__backdrop");
+const backdropEl = dialogEl.querySelector(".overlay__backdrop");
 
 let activeResolve = null;
 let dismissValue = false;
@@ -53,7 +53,7 @@ function open({ title, message, type, defaultValue = "", placeholder = "", confi
         if (type !== "alert") {
             const cancelBtn = document.createElement("button");
             cancelBtn.type = "button";
-            cancelBtn.className = "ghost-btn ghost-btn--on-card";
+            cancelBtn.className = "ghost-btn";
             cancelBtn.textContent = cancelText;
             cancelBtn.addEventListener("click", () => close(dismissValue));
             actionsEl.appendChild(cancelBtn);
@@ -61,7 +61,7 @@ function open({ title, message, type, defaultValue = "", placeholder = "", confi
 
         const okBtn = document.createElement("button");
         okBtn.type = "button";
-        okBtn.className = "dialog-btn dialog-btn--primary";
+        okBtn.className = "primary primary--small";
         okBtn.textContent = confirmText;
         okBtn.addEventListener("click", () => {
             if (type === "prompt") return close(inputEl.value);

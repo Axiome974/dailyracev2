@@ -39,7 +39,7 @@ export async function initRemote(onUpdate) {
             myUid = user.uid;
 
             if (statusEl) {
-                statusEl.textContent = "🌐 Multijoueur connecte";
+                statusEl.innerHTML = "<i></i> MULTIJOUEUR";
                 statusEl.classList.remove("sync-status--local");
                 statusEl.classList.add("sync-status--remote");
             }

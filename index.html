@@ -6,135 +6,148 @@
           content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>Daily Race 🏁</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=DM+Sans:wght@400;500;600;700;800&display=swap">
     <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
-<div class="app">
-    <header class="app__header">
-        <h1><span class="flag">🏁</span> <span class="title-text">Daily Race</span> <span class="flag">🏁</span></h1>
+<main class="shell">
+    <header class="topbar">
+        <div class="brand">
+            <div class="brandmark">🏁</div>
+            <div>
+                <div class="brandname">DAILY <span>RACE</span></div>
+                <small>LE RITUEL DU MATIN</small>
+            </div>
+        </div>
+        <div class="topright">
+            <span id="sync-status" class="pill sync-status--local"><i></i> MODE LOCAL</span>
+            <button class="iconbtn" type="button" data-action="new-race" title="Nouvelle course" aria-label="Nouvelle course">🔁</button>
+            <button class="iconbtn" type="button" data-action="open-settings" title="Réglages" aria-label="Réglages">⚙️</button>
+            <button class="iconbtn" type="button" data-action="open-bonus-weights" title="Probabilité des bonus" aria-label="Probabilité des bonus">🎲</button>
+            <button class="iconbtn" type="button" data-action="export-session" title="Exporter" aria-label="Exporter la session">📤</button>
+            <button class="iconbtn" type="button" data-action="import-session" title="Importer" aria-label="Importer une session">📥</button>
+            <button class="iconbtn" type="button" data-action="show-bonus-help" title="Voir tous les bonus" aria-label="Voir tous les bonus">❓</button>
+        </div>
     </header>
 
-    <div id="claim-bar" class="card claim-bar hidden">
+    <div class="heading">
+        <div>
+            <div class="eyebrow">⚡ LA GRILLE EST OUVERTE</div>
+            <h1>À QUI LE <em>TOUR ?</em></h1>
+        </div>
+        <p class="sub">Un tirage, un choix, et le classement peut basculer. Tout se joue maintenant.</p>
+    </div>
+
+    <div id="claim-bar" class="panel claim-bar hidden">
         <p>🌐 Mode multijoueur actif — choisis quel joueur tu incarnes sur cet appareil :</p>
         <div class="claim-bar__controls">
             <label for="claim-select" class="sr-only">Choisir mon joueur</label>
             <select id="claim-select"></select>
-            <button id="claim-btn" type="button" data-action="claim-player">C'est moi !</button>
+            <button id="claim-btn" class="primary primary--small" type="button" data-action="claim-player">C'est moi !</button>
         </div>
     </div>
 
-    <div class="board-row">
-        <section class="card scoreboard">
-            <div class="scoreboard__head">
-                <h2>Classement</h2>
-                <form id="add-player-form" class="add-player-form">
-                    <label for="add-player-input" class="sr-only">Nom du joueur</label>
-                    <input id="add-player-input" type="text" placeholder="Nom du joueur" maxlength="20" autocomplete="off" />
-                    <button type="submit">+ Ajouter</button>
-                </form>
-            </div>
-            <ul id="players-list" class="players-list"></ul>
-            <div id="draw-controls" class="scoreboard__controls"></div>
-        </section>
+    <div class="layout">
+        <div class="left">
+            <section class="panel track" aria-label="Progression des joueurs">
+                <div class="track-head">
+                    <h2>🏁 LA COURSE</h2>
+                    <small id="track-goal">OBJECTIF : 10 CASES</small>
+                </div>
+                <div class="board-wrap">
+                    <div class="board" id="board" aria-live="polite"></div>
+                </div>
+                <div class="score-section">
+                    <div class="score-section__head">
+                        <h3>CLASSEMENT DES JOUEURS</h3>
+                        <form id="add-player-form" class="add-player-form">
+                            <label for="add-player-input" class="sr-only">Nom du joueur</label>
+                            <input id="add-player-input" type="text" placeholder="Nom du joueur" maxlength="20" autocomplete="off" />
+                            <button type="submit">+ AJOUTER</button>
+                        </form>
+                    </div>
+                    <ol class="score-list" id="players-list" aria-live="polite"></ol>
+                </div>
+                <div class="race-footer">
+                    <span>🎲 Un tirage · un choix · un déplacement</span>
+                    <span id="leader-line"><b>—</b></span>
+                </div>
+            </section>
+        </div>
 
-        <section class="card track-card">
-            <div class="track-card__head">
-                <h2>Piste de course</h2>
-                <div class="track-card__icons">
-                    <button class="icon-btn" type="button" data-action="new-race" title="Nouvelle course">🔁</button>
-                    <button class="icon-btn" type="button" data-action="open-settings" title="Reglages">⚙️</button>
-                    <button class="icon-btn" type="button" data-action="open-bonus-weights" title="Probabilite des bonus">🎲</button>
-                    <button class="icon-btn" type="button" data-action="export-session" title="Exporter">📤</button>
-                    <button class="icon-btn" type="button" data-action="import-session" title="Importer">📥</button>
-                    <button class="icon-btn" type="button" data-action="show-bonus-help" title="Voir tous les bonus">❓</button>
-                    <button class="icon-btn" type="button" data-action="flip-track-card" title="Voir le journal de bord">📖</button>
-                </div>
-            </div>
-            <div class="flip-card" id="track-flip">
-                <div class="flip-card__inner">
-                    <div class="flip-card__face flip-card__face--front">
-                        <div id="track" class="track"></div>
-                    </div>
-                    <div class="flip-card__face flip-card__face--back" id="back-log">
-                        <h3 class="flip-card__back-title">Journal de bord</h3>
-                        <ul id="log-list" class="log-list"></ul>
-                    </div>
-                    <div class="flip-card__face flip-card__face--back hidden" id="back-bonuses">
-                        <h3 class="flip-card__back-title">Tous les bonus</h3>
-                        <ul id="bonus-catalog-list" class="peek-list"></ul>
-                    </div>
-                </div>
-            </div>
-        </section>
+        <aside class="aside">
+            <section class="panel standings">
+                <div class="draw-box" id="draw-controls"></div>
+                <div class="side-title"><h2>LE PODIUM</h2><span>🏆 TOP 3</span></div>
+                <div class="podium" id="podium"></div>
+                <div class="info-strip">⚡ <strong>Le suspense est réel.</strong><br>Un Mega Jump ou un bonus peut tout changer.</div>
+            </section>
+            <section class="panel feed">
+                <div class="side-title"><h2>DERNIERS REBONDISSEMENTS</h2><span>JOURNAL</span></div>
+                <ul class="feed-list" id="log-list"></ul>
+            </section>
+        </aside>
     </div>
+</main>
 
-<!--    <footer class="app__footer">-->
-<!--        <span id="sync-status" class="sync-status sync-status&#45;&#45;local">💾 Mode local</span>-->
-<!--    </footer>-->
-</div>
-
-<div id="turn-modal" class="modal-overlay hidden">
-    <div class="modal-overlay__backdrop"></div>
-    <section class="card turn-card modal-overlay__card">
+<div id="turn-modal" class="overlay hidden">
+    <div class="reveal" role="dialog" aria-modal="true" aria-live="polite">
+        <div class="confetti" id="turn-confetti"></div>
         <div id="turn-content"></div>
-    </section>
+    </div>
 </div>
 
-<div id="app-dialog" class="modal-overlay hidden">
-    <div class="modal-overlay__backdrop"></div>
-    <section class="card modal-overlay__card dialog-card">
-        <h3 id="dialog-title" class="dialog-title hidden"></h3>
+<div id="app-dialog" class="overlay overlay--top hidden">
+    <div class="overlay__backdrop"></div>
+    <section class="sheet dialog-card" role="dialog" aria-modal="true">
+        <h3 id="dialog-title" class="sheet__title hidden"></h3>
         <p id="dialog-message" class="dialog-message hidden"></p>
         <label for="dialog-input" class="sr-only">Texte</label>
-        <textarea id="dialog-input" class="dialog-input hidden" rows="3"></textarea>
+        <textarea id="dialog-input" class="field hidden" rows="3"></textarea>
         <label for="dialog-number-input" class="sr-only">Valeur</label>
-        <input id="dialog-number-input" type="number" class="dialog-input dialog-input--number hidden" />
+        <input id="dialog-number-input" type="number" class="field field--number hidden" />
         <div id="dialog-actions" class="dialog-actions"></div>
     </section>
 </div>
 
-<div id="settings-modal" class="modal-overlay hidden">
-    <div class="modal-overlay__backdrop" data-action="close-settings"></div>
-    <section class="card modal-overlay__card settings-card">
-        <h3>⚙️ Reglages</h3>
-
+<div id="settings-modal" class="overlay hidden">
+    <div class="overlay__backdrop" data-action="close-settings"></div>
+    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <h3 id="settings-title" class="sheet__title">⚙️ Réglages</h3>
         <div class="settings-section">
-            <label for="settings-target" class="settings-label">🎯 Score a atteindre pour gagner</label>
+            <label for="settings-target" class="settings-label">🎯 Score à atteindre pour gagner</label>
             <div class="settings-row">
-                <input id="settings-target" type="number" min="3" max="50" />
-                <button class="dialog-btn dialog-btn--primary" type="button" data-action="apply-target">Appliquer</button>
+                <input id="settings-target" class="field" type="number" min="3" max="50" />
+                <button class="primary primary--small" type="button" data-action="apply-target">Appliquer</button>
             </div>
         </div>
-
-        <div class="settings-section">
-            <p class="settings-label">🌗 Mode</p>
-            <div id="mode-toggle" class="mode-toggle">
-                <button class="mode-toggle__btn" type="button" data-action="pick-mode" data-mode="light">☀️ Clair</button>
-                <button class="mode-toggle__btn" type="button" data-action="pick-mode" data-mode="dark">🌙 Sombre</button>
-            </div>
-        </div>
-
-        <div class="settings-section">
-            <p class="settings-label">🎨 Theme de couleurs</p>
-            <div id="theme-swatches" class="theme-swatches"></div>
-        </div>
-
-        <button class="ghost-btn ghost-btn--on-card" type="button" data-action="close-settings" style="width:100%;margin-top:6px;">Fermer</button>
+        <button class="ghost-btn ghost-btn--block" type="button" data-action="close-settings">Fermer</button>
     </section>
 </div>
 
-<div id="bonus-weights-modal" class="modal-overlay hidden">
-    <div class="modal-overlay__backdrop" data-action="close-bonus-weights"></div>
-    <section class="card modal-overlay__card settings-card">
-        <h3>🎲 Probabilite des bonus</h3>
+<div id="bonus-weights-modal" class="overlay hidden">
+    <div class="overlay__backdrop" data-action="close-bonus-weights"></div>
+    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="bonus-weights-title">
+        <h3 id="bonus-weights-title" class="sheet__title">🎲 Probabilité des bonus</h3>
         <div class="settings-section">
             <div class="settings-label-row">
-                <p class="settings-hint" style="margin:0;">0 = bonus desactive, plus c'est eleve, plus il est frequent.</p>
-                <button class="ghost-btn ghost-btn--on-card reset-weights-btn" type="button" data-action="reset-weights">Reinitialiser</button>
+                <p class="settings-hint">0 = bonus désactivé, plus c'est élevé, plus il est fréquent.</p>
+                <button class="ghost-btn" type="button" data-action="reset-weights">Réinitialiser</button>
             </div>
             <div id="bonus-weights" class="bonus-weights"></div>
         </div>
-        <button class="ghost-btn ghost-btn--on-card" type="button" data-action="close-bonus-weights" style="width:100%;margin-top:6px;">Fermer</button>
+        <button class="ghost-btn ghost-btn--block" type="button" data-action="close-bonus-weights">Fermer</button>
+    </section>
+</div>
+
+<div id="bonus-catalog-modal" class="overlay hidden">
+    <div class="overlay__backdrop" data-action="close-bonus-catalog"></div>
+    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="bonus-catalog-title">
+        <h3 id="bonus-catalog-title" class="sheet__title">❓ Tous les bonus</h3>
+        <ul id="bonus-catalog-list" class="peek-list"></ul>
+        <button class="ghost-btn ghost-btn--block" type="button" data-action="close-bonus-catalog">Fermer</button>
     </section>
 </div>
 

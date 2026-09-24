@@ -2,23 +2,30 @@ import { getBonusDef, eligibleTargets, BONUS_CATALOG } from "./bonuses.js";
 import { canDrawToday } from "./game.js";
 import { AVATARS } from "./players.js";
 
+const boardEl = document.getElementById("board");
 const playersListEl = document.getElementById("players-list");
-const trackEl = document.getElementById("track");
+const podiumEl = document.getElementById("podium");
+const leaderLineEl = document.getElementById("leader-line");
+const trackGoalEl = document.getElementById("track-goal");
 const drawControlsEl = document.getElementById("draw-controls");
 const turnModalEl = document.getElementById("turn-modal");
+const revealEl = turnModalEl.querySelector(".reveal");
 const turnContentEl = document.getElementById("turn-content");
+const confettiEl = document.getElementById("turn-confetti");
 const logListEl = document.getElementById("log-list");
 const avatarPickerEl = document.getElementById("avatar-picker");
 const bonusCatalogListEl = document.getElementById("bonus-catalog-list");
+
+const CONFETTI_COLORS = ["#d9ff43", "#ffab64", "#80d7ff", "#f788d0"];
 
 // Catalogue statique : ne depend pas de l'etat de la partie, rendu une seule fois.
 bonusCatalogListEl.innerHTML = BONUS_CATALOG.map(
     (b) => `
         <li class="peek-item">
-            <span>${esc(b.icon)}</span>
+            <span class="peek-item__icon">${esc(b.icon)}</span>
             <span>
-                <strong>${esc(b.label)}</strong>${b.passive ? ` <em style="opacity:.7;">(passif)</em>` : ""}<br>
-                <span style="font-size:0.8rem;color:var(--ink-soft);">${esc(b.description)}</span>
+                <strong>${esc(b.label)}</strong>${b.passive ? ` <em>(passif)</em>` : ""}
+                <small>${esc(b.description)}</small>
             </span>
         </li>
     `
@@ -38,6 +45,10 @@ function playerName(state, id) {
     return state.players.find((p) => p.id === id)?.name ?? "?";
 }
 
+function sortedPlayers(state) {
+    return [...state.players].sort((a, b) => b.position - a.position);
+}
+
 // Delai stable (pas Math.random a chaque rendu) derive de l'id du joueur,
 // pour que les pastilles "bonus" ne brillent pas toutes en meme temps.
 function stableDelay(id, maxSeconds = 3.2) {
@@ -48,9 +59,14 @@ function stableDelay(id, maxSeconds = 3.2) {
     return ((hash % 1000) / 1000) * maxSeconds;
 }
 
+let lastState = null;
+
 export function renderAll(state, ui) {
+    lastState = state;
+    renderGoal(state);
+    renderBoard(state);
     renderPlayers(state);
-    renderTrack(state);
+    renderPodium(state);
     renderDrawControls(state);
     renderModal(state, ui);
     renderLog(state);
@@ -60,92 +76,174 @@ export function isModalOpen(state) {
     return Boolean(state.winnerId) || state.turn.phase === "drawn" || state.turn.phase === "resolved";
 }
 
-function renderDrawControls(state) {
+function renderGoal(state) {
+    const length = state.track.length;
+    trackGoalEl.textContent = `OBJECTIF : ${length} CASES`;
+
+    const leader = sortedPlayers(state)[0];
     if (state.winnerId) {
-        drawControlsEl.innerHTML = "";
-        return;
+        leaderLineEl.innerHTML = `🏆 <b>${esc(playerName(state, state.winnerId))}</b> a gagné la course`;
+    } else if (leader) {
+        leaderLineEl.innerHTML = `<b>${esc(leader.name)}</b> mène la course`;
+    } else {
+        leaderLineEl.innerHTML = `<b>—</b>`;
     }
-    if (state.players.length < 2) {
-        drawControlsEl.innerHTML = `<p class="turn-prompt">Ajoute au moins 2 joueurs pour lancer le tirage du jour.</p>`;
-        return;
+}
+
+function renderDrawControls(state) {
+    let title;
+    let body;
+
+    if (state.winnerId) {
+        title = `${esc(playerName(state, state.winnerId))} a gagné !`;
+        body = `<button class="primary draw-box__button" type="button" data-action="new-race">NOUVELLE COURSE <span aria-hidden="true">🔁</span></button>`;
+    } else if (state.players.length < 2) {
+        title = "Il faut du monde en piste";
+        body = `<p class="draw-box__note">Ajoute au moins 2 joueurs pour lancer le tirage du jour.</p>`;
+    } else if (state.turn.phase !== "idle") {
+        title = "Tour en cours…";
+        body = `<button class="primary draw-box__button" type="button" disabled>LANCER LE TIRAGE <span aria-hidden="true">↗</span></button>`;
+    } else if (!canDrawToday(state)) {
+        title = "Tout le monde est en vacances";
+        body = `<p class="draw-box__note">🌴 Impossible de lancer un tirage.</p>`;
+    } else {
+        title = "Qui entre en piste ?";
+        body = `<button class="primary draw-box__button" type="button" data-action="draw">LANCER LE TIRAGE <span aria-hidden="true">↗</span></button>`;
     }
-    if (state.turn.phase !== "idle") {
-        drawControlsEl.innerHTML = "";
-        return;
-    }
-    if (!canDrawToday(state)) {
-        drawControlsEl.innerHTML = `<p class="turn-prompt">🌴 Tout le monde est en vacances ! Impossible de lancer un tirage.</p>`;
-        return;
-    }
-    const already = state.turn.date
-        ? ``
-        : "";
+
     drawControlsEl.innerHTML = `
-        <button class="draw-btn" type="button" data-action="draw">🎲 Tirer le joueur du jour</button>
-        ${already}
+        <span class="draw-box__kicker">🎲 LE TIRAGE DU JOUR</span>
+        <p class="draw-box__title">${title}</p>
+        ${body}
     `;
 }
+
+let lastBurstKey = null;
 
 function renderModal(state, ui) {
     const open = isModalOpen(state);
     const visible = open && !ui?.modalSuppressed;
     turnModalEl.classList.toggle("hidden", !visible);
-    turnModalEl.querySelector(".turn-card")?.classList.toggle("turn-card--victory", Boolean(state.winnerId));
+    revealEl.classList.toggle("reveal--victory", Boolean(state.winnerId));
     if (!open) {
         turnContentEl.innerHTML = "";
+        revealEl.classList.remove("reveal--fail");
+        lastBurstKey = null;
         return;
     }
-    renderTurn(state, ui);
+    const tone = renderTurn(state, ui);
+    revealEl.classList.toggle("reveal--fail", tone === "fail");
+
+    // Petite pluie de confettis a chaque nouvelle etape du tour (tirage,
+    // resultat), une seule fois meme si l'etat est re-rendu (sync distante).
+    const burstKey = visible && !state.winnerId ? `${state.turn.phase}:${state.log[0]?.id}` : null;
+    if (burstKey && burstKey !== lastBurstKey && tone !== "fail") burstConfetti();
+    if (visible) lastBurstKey = burstKey;
 }
 
 export function openTurnModal() {
+    revealEl.classList.remove("reveal--fail", "reveal--victory");
     turnModalEl.classList.remove("hidden");
+}
+
+export function renderSpinFrame(player) {
+    turnContentEl.innerHTML = `
+        <div class="cap">LE TIRAGE COMMENCE</div>
+        <span class="reveal-avatar reveal-avatar--spin">${esc(player.avatar)}</span>
+        <h2>${esc(player.name)} <span>?</span></h2>
+        <p>La grille retient son souffle…</p>
+    `;
+}
+
+function burstConfetti() {
+    confettiEl.innerHTML = Array.from(
+        { length: 30 },
+        (_, i) =>
+            `<i style="--x:${Math.random() * 100}%;--color:${CONFETTI_COLORS[i % CONFETTI_COLORS.length]};--rot:${Math.random() * 360}deg;--delay:${Math.random() * 0.45}s"></i>`
+    ).join("");
+    setTimeout(() => {
+        confettiEl.innerHTML = "";
+    }, 2400);
 }
 
 function renderPlayers(state) {
     if (state.players.length === 0) {
-        playersListEl.innerHTML = `<li class="empty-hint">Ajoute tes coequipiers pour lancer la course 👆</li>`;
+        playersListEl.innerHTML = `<li class="empty-hint">Ajoute tes coéquipiers pour lancer la course 👆</li>`;
         return;
     }
 
-    const sorted = [...state.players].sort((a, b) => b.position - a.position);
-
-    playersListEl.innerHTML = sorted
-        .map((p) => {
+    playersListEl.innerHTML = sortedPlayers(state)
+        .map((p, i) => {
             const isTurn = state.turn.playerId === p.id && state.turn.phase !== "idle";
             const isWinner = state.winnerId === p.id;
-            const classes = ["player"];
-            if (isTurn) classes.push("player--turn");
-            if (isWinner) classes.push("player--winner");
-            if (p.onVacation) classes.push("player--vacation");
+            const classes = ["score-row"];
+            if (i === 0) classes.push("score-row--first");
+            if (isTurn) classes.push("score-row--turn");
+            if (isWinner) classes.push("score-row--winner");
+            if (p.onVacation) classes.push("score-row--vacation");
 
             const hasShield = p.bonuses.some((b) => b.id === "shield");
             const isFrozen = Boolean(p.frozen);
 
             return `
                 <li class="${classes.join(" ")}" style="--player-color:${esc(p.color)}">
-                    <span class="player__avatar-wrap">
-                        <button class="player__avatar" type="button" data-action="change-avatar" data-player-id="${p.id}" title="Changer d'avatar">${esc(p.avatar)}</button>
-                        ${hasShield ? `<span class="status-badge status-badge--shield" title="Protege par un bouclier"></span>` : ""}
-                        ${isFrozen ? `<span class="status-badge status-badge--frozen" title="Givre : passera son prochain tour"></span>` : ""}
+                    <span class="score-row__rank">${String(i + 1).padStart(2, "0")}</span>
+                    <span class="score-row__avatar-wrap">
+                        <button class="score-row__avatar" type="button" data-action="change-avatar" data-player-id="${p.id}" title="Changer d'avatar">${esc(p.avatar)}</button>
+                        ${hasShield ? `<span class="status-badge status-badge--shield" title="Protégé par un bouclier"></span>` : ""}
+                        ${isFrozen ? `<span class="status-badge status-badge--frozen" title="Givré : passera son prochain tour"></span>` : ""}
                     </span>
-                    <span class="player__name">${esc(p.name)}${isWinner ? " 🏆" : ""}</span>
-                    ${p.onVacation ? `<span class="vacation-tag" title="En vacances">🌴</span>` : ""}
-                    <span class="player__score">${p.position}/${state.track.length}</span>
-                    <span class="player__bonuses${p.bonuses.length > 0 ? " player__bonuses--active" : ""}" style="--shine-delay:${stableDelay(p.id)}s;" title="${p.bonuses.length} bonus en reserve">
-                        ⚡ ${p.bonuses.length}
+                    <span class="score-row__name">${esc(p.name)}${isWinner ? " 🏆" : ""}${p.onVacation ? ` <span title="En vacances">🌴</span>` : ""}</span>
+                    <span class="score-row__bonuses${p.bonuses.length > 0 ? " score-row__bonuses--active" : ""}" style="--shine-delay:${stableDelay(p.id)}s;" title="${p.bonuses.length} bonus en réserve">⚡${p.bonuses.length}</span>
+                    <span class="score-row__points"><b>${p.position}</b><small>/ ${state.track.length}</small></span>
+                    <span class="score-row__tools">
+                        <button class="row-btn${p.onVacation ? " row-btn--active" : ""}" type="button" data-action="toggle-vacation" data-player-id="${p.id}" title="${p.onVacation ? "Revenir de vacances" : "Partir en vacances"}">🌴</button>
+                        <button class="row-btn row-btn--remove" type="button" data-action="remove-player" data-player-id="${p.id}" aria-label="Retirer ${esc(p.name)}" title="Retirer">✕</button>
                     </span>
-                    <button class="player__vacation${p.onVacation ? " player__vacation--active" : ""}" type="button" data-action="toggle-vacation" data-player-id="${p.id}" title="${p.onVacation ? "Revenir de vacances" : "Partir en vacances"}">
-                        🌴
-                    </button>
-                    <button class="player__remove" type="button" data-action="remove-player" data-player-id="${p.id}" aria-label="Retirer ${esc(p.name)}">✕</button>
                 </li>
             `;
         })
         .join("");
 }
 
-const TRACK_COLS = 4;
+function renderPodium(state) {
+    const [first, second, third] = sortedPlayers(state);
+    if (!first) {
+        podiumEl.innerHTML = `<p class="podium__empty">Le podium attend ses pilotes.</p>`;
+        return;
+    }
+    const step = (p, rank) =>
+        p
+            ? `<div><span class="face">${esc(p.avatar)}</span><b>${esc(p.name)}</b><div class="step">${rank}</div></div>`
+            : `<div class="podium__vacant"><span class="face">·</span><b>&nbsp;</b><div class="step">${rank}</div></div>`;
+    podiumEl.innerHTML = step(second, 2) + step(first, 1) + step(third, 3);
+}
+
+/* ---------- Plateau ---------- */
+
+const TERRAINS = ["🌿", "🌊", "🔥", "🌬️", "🌲", "⚡", "🌋", "🌴", "☁️", "✨"];
+const mobileQuery = window.matchMedia("(max-width: 650px)");
+
+mobileQuery.addEventListener("change", () => {
+    if (lastState) renderBoard(lastState);
+});
+window.addEventListener("resize", () => requestAnimationFrame(drawRoad));
+
+// Le nombre de colonnes suit la longueur de la course (3 a 50 cases) pour
+// garder un plateau lisible ; sur mobile on reste a 5 colonnes.
+function boardColumns(tileCount) {
+    if (mobileQuery.matches || tileCount <= 15) return 5;
+    if (tileCount <= 24) return 6;
+    if (tileCount <= 35) return 7;
+    return 8;
+}
+
+// Parcours en serpentin qui part du bas a gauche et remonte vers l'arrivee.
+function tilePlacement(i, cols, rows) {
+    const r = Math.floor(i / cols);
+    const k = i % cols;
+    return { row: rows - r, col: r % 2 === 0 ? k + 1 : cols - k };
+}
 
 function moverHighlight(state) {
     if (state.turn.phase !== "resolved" || !state.turn.lastResult) return null;
@@ -155,16 +253,16 @@ function moverHighlight(state) {
     return null;
 }
 
-function captureTokenRects() {
+function capturePilotRects() {
     const rects = {};
-    trackEl.querySelectorAll(".track__token").forEach((el) => {
+    boardEl.querySelectorAll(".pilot").forEach((el) => {
         rects[el.dataset.playerId] = el.getBoundingClientRect();
     });
     return rects;
 }
 
-function flipTokens(beforeRects) {
-    trackEl.querySelectorAll(".track__token").forEach((el) => {
+function flipPilots(beforeRects) {
+    boardEl.querySelectorAll(".pilot").forEach((el) => {
         const before = beforeRects[el.dataset.playerId];
         if (!before) return;
         const after = el.getBoundingClientRect();
@@ -174,193 +272,229 @@ function flipTokens(beforeRects) {
         el.style.transition = "none";
         el.style.transform = `translate(${dx}px, ${dy}px)`;
         requestAnimationFrame(() => {
-            el.style.transition = "transform 0.55s cubic-bezier(.34, 1.56, .64, 1)";
+            el.style.transition = "transform 0.6s cubic-bezier(.34, 1.56, .64, 1)";
             el.style.transform = "translate(0, 0)";
         });
     });
 }
 
-// Chaque case (hors depart/arrivee) represente un element qui se repete en
-// boucle le long du parcours, avec sa propre petite decoration animee.
-const ELEMENTS = ["sea", "earth", "fire", "air"];
-
-function cellTheme(i, length) {
-    if (i === 0 || i === length) return null;
-    return ELEMENTS[(i - 1) % ELEMENTS.length];
+function finishDeco(tileCount, cols, rows) {
+    const topRowIndex = rows - 1;
+    const used = tileCount - topRowIndex * cols;
+    const empty = cols - used;
+    if (empty < 2) return "";
+    const column = topRowIndex % 2 === 0 ? `${used + 1} / ${cols + 1}` : `1 / ${empty + 1}`;
+    return `
+        <div class="finish-deco" style="grid-row:1;grid-column:${column}">
+            <span>🏆</span><b>LA LIGNE<br>D'ARRIVÉE</b><small>Encore quelques cases…</small>
+        </div>
+    `;
 }
 
-function themeDeco(theme) {
-    if (theme === "sea") {
-        return `
-            <span class="deco deco--bubble" style="left:28%;animation-delay:0s;"></span>
-            <span class="deco deco--bubble" style="left:52%;animation-delay:0.7s;"></span>
-            <span class="deco deco--bubble" style="left:72%;animation-delay:1.3s;"></span>
-        `;
-    }
-    if (theme === "earth") {
-        return `
-            <span class="deco deco--sprout">🌱</span>
-            <span class="deco deco--speck" style="left:22%;top:75%;"></span>
-            <span class="deco deco--speck" style="left:62%;top:30%;"></span>
-            <span class="deco deco--speck" style="left:42%;top:82%;"></span>
-        `;
-    }
-    if (theme === "fire") {
-        return `
-            <span class="deco deco--flame"></span>
-            <span class="deco deco--spark" style="left:36%;animation-delay:0.2s;"></span>
-            <span class="deco deco--spark" style="left:60%;animation-delay:0.7s;"></span>
-        `;
-    }
-    if (theme === "air") {
-        return `
-            <span class="deco deco--puff" style="top:28%;animation-delay:0s;"></span>
-            <span class="deco deco--puff" style="top:62%;animation-delay:1.2s;"></span>
-        `;
-    }
-    return "";
-}
-
-function cellRowCol(i) {
-    const row = Math.floor(i / TRACK_COLS);
-    const colInRow = i % TRACK_COLS;
-    const col = row % 2 === 0 ? colInRow : TRACK_COLS - 1 - colInRow;
-    return { row, col };
-}
-
-function arrowToNext(i, length) {
-    if (i >= length) return null;
-    const a = cellRowCol(i);
-    const b = cellRowCol(i + 1);
-    if (a.row !== b.row) return "down";
-    return b.col > a.col ? "right" : "left";
-}
-
-function renderTrack(state) {
+function renderBoard(state) {
     const length = state.track.length;
-    const beforeRects = captureTokenRects();
+    const tileCount = length + 1;
+    const cols = boardColumns(tileCount);
+    const rows = Math.ceil(tileCount / cols);
+    const beforeRects = capturePilotRects();
     const highlight = moverHighlight(state);
+    const activeId = state.turn.phase !== "idle" ? state.turn.playerId : null;
 
-    const cells = [];
+    const tiles = [];
     for (let i = 0; i <= length; i++) {
-        const { row, col } = cellRowCol(i);
-        const occupants = state.players.filter((p) => p.position === i);
+        const { row, col } = tilePlacement(i, cols, rows);
+        const occupants = state.players.filter((p) => Math.min(p.position, length) === i);
         const isStart = i === 0;
         const isFinish = i === length;
-        const theme = cellTheme(i, length);
-        const cellClass = isStart ? "track__cell--start" : isFinish ? "track__cell--finish" : `track__cell--${theme}`;
-        const cellStyle = `grid-column:${col + 1};grid-row:${row + 1};`;
-        const dir = arrowToNext(i, length);
+        const classes = ["tile"];
+        if (isStart) classes.push("tile--start");
+        if (isFinish) classes.push("tile--finish");
+        if (occupants.length) classes.push("tile--busy");
+        if (occupants.length > 2) classes.push("tile--crowded");
+        const terrain = isStart ? "🏁" : isFinish ? "🏆" : TERRAINS[(i - 1) % TERRAINS.length];
+        const label = isStart ? "DÉPART" : isFinish ? "ARRIVÉE" : String(i).padStart(2, "0");
+        const aria = `Case ${i}${occupants.length ? " : " + occupants.map((p) => p.name).join(", ") : ""}`;
 
-        cells.push(`
-            <div class="track__cell ${cellClass}" style="${cellStyle}">
-                ${theme ? themeDeco(theme) : ""}
-                <span class="track__cell-number">${isStart ? "🚩" : isFinish ? "🏆" : i}</span>
-                <div class="track__tokens">
+        tiles.push(`
+            <div class="${classes.join(" ")}" data-index="${i}" style="grid-row:${row};grid-column:${col}" aria-label="${esc(aria)}">
+                <span class="tile-number">${label}</span>
+                <span class="tile-terrain" aria-hidden="true">${terrain}</span>
+                <div class="tile-pilots">
                     ${occupants
                         .map((p) => {
-                            const cls = highlight?.playerId === p.id ? ` track__token--${highlight.cls}` : "";
-                            return `
-                                <span class="track__token${cls}" data-player-id="${p.id}" title="${esc(p.name)}">
-                                    <span class="track__token-inner">${esc(p.avatar)}</span>
-                                </span>
-                            `;
+                            const cls = ["pilot"];
+                            if (p.id === activeId) cls.push("pilot--active");
+                            if (highlight?.playerId === p.id) cls.push(`pilot--${highlight.cls}`);
+                            return `<span class="${cls.join(" ")}" data-player-id="${p.id}" style="--pilot:${esc(p.color)}" title="${esc(p.name)} · case ${i}"><span class="pilot__face">${esc(p.avatar)}</span></span>`;
                         })
                         .join("")}
                 </div>
-                ${dir ? `<span class="track__arrow track__arrow--${dir}">▶</span>` : ""}
             </div>
         `);
     }
 
-    trackEl.innerHTML = cells.join("");
-    requestAnimationFrame(() => flipTokens(beforeRects));
+    boardEl.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+    boardEl.style.gridTemplateRows = `repeat(${rows}, var(--tile-h))`;
+    boardEl.innerHTML = tiles.join("") + finishDeco(tileCount, cols, rows);
+    requestAnimationFrame(() => {
+        drawRoad();
+        flipPilots(beforeRects);
+    });
 }
 
-function resultMarkup(state, result) {
+// Route SVG qui relie le centre des cases dans l'ordre, avec des virages
+// arrondis a chaque changement de direction du serpentin.
+function drawRoad() {
+    const tiles = [...boardEl.querySelectorAll(".tile")].sort((a, b) => a.dataset.index - b.dataset.index);
+    boardEl.querySelector(".board-road")?.remove();
+    if (tiles.length < 2) return;
+
+    const bounds = boardEl.getBoundingClientRect();
+    const tileWidth = tiles[0].getBoundingClientRect().width;
+    const points = tiles.map((tile) => {
+        const r = tile.getBoundingClientRect();
+        return { x: r.left - bounds.left + r.width / 2, y: r.top - bounds.top + r.height / 2 };
+    });
+    const radius = Math.min(24, tileWidth * 0.22);
+
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 1; i < points.length - 1; i++) {
+        const a = points[i - 1];
+        const b = points[i];
+        const c = points[i + 1];
+        const incoming = { x: Math.sign(b.x - a.x), y: Math.sign(b.y - a.y) };
+        const outgoing = { x: Math.sign(c.x - b.x), y: Math.sign(c.y - b.y) };
+        if (incoming.x !== outgoing.x || incoming.y !== outgoing.y) {
+            d += ` L ${b.x - incoming.x * radius} ${b.y - incoming.y * radius} Q ${b.x} ${b.y} ${b.x + outgoing.x * radius} ${b.y + outgoing.y * radius}`;
+        } else {
+            d += ` L ${b.x} ${b.y}`;
+        }
+    }
+    d += ` L ${points.at(-1).x} ${points.at(-1).y}`;
+
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("class", "board-road");
+    svg.setAttribute("viewBox", `0 0 ${bounds.width} ${bounds.height}`);
+    svg.setAttribute("aria-hidden", "true");
+    const width = Math.min(45, Math.max(25.5, tileWidth * 0.45));
+    for (const [cls, strokeWidth] of [
+        ["board-road__edge", width + 7.5],
+        ["board-road__surface", width],
+        ["board-road__center", 2],
+    ]) {
+        const path = document.createElementNS(ns, "path");
+        path.setAttribute("class", cls);
+        path.setAttribute("d", d);
+        path.setAttribute("stroke-width", strokeWidth);
+        svg.append(path);
+    }
+    boardEl.prepend(svg);
+}
+
+/* ---------- Modale du tour ---------- */
+
+function resultView(state, result) {
     const name = esc(playerName(state, state.turn.playerId));
 
     if (result.type === "advance") {
-        return `<div class="result result--success"><span class="big">➡️</span>${name} avance d'une case !</div>`;
+        return { icon: "➡️", title: `UNE CASE <span>DE PLUS !</span>`, desc: `${name} avance d'une case.` };
     }
 
     if (result.type === "megajump") {
         return result.success
-            ? `<div class="result result--success"><span class="big">🚀</span>Mega Jump reussi ! ${name} avance de 3 cases.</div>`
-            : `<div class="result result--fail"><span class="big">💥</span>Mega Jump rate... ${name} recule de 2 cases.</div>`;
+            ? { icon: "🚀", title: `MEGA JUMP <span>RÉUSSI !</span>`, desc: `${name} avance de 3 cases.` }
+            : { icon: "💥", title: `MEGA JUMP <span>RATÉ…</span>`, desc: `${name} recule de 2 cases.`, tone: "fail" };
     }
 
     if (result.type === "bonus") {
         const bonus = result.bonus;
-        return `
-            <div class="result"><span class="big">🎁</span>${name} ouvre la caisse...</div>
-            <div class="bonus-reveal">
-                <span class="icon">${esc(bonus.icon)}</span>
-                <strong>${esc(bonus.label)}</strong>
-                <p>${esc(bonus.description)}</p>
-                <p class="secret-note">🤫 Ce bonus rejoint ton inventaire secret (max 2). Tu pourras l'utiliser lors d'un prochain tirage, via le choix "⚡ Utiliser un bonus".</p>
-            </div>
-        `;
+        return {
+            icon: "🎁",
+            title: `CAISSE <span>OUVERTE !</span>`,
+            desc: `${name} ouvre la caisse…`,
+            extra: `
+                <div class="bonus-reveal">
+                    <span class="bonus-reveal__icon">${esc(bonus.icon)}</span>
+                    <strong>${esc(bonus.label)}</strong>
+                    <p>${esc(bonus.description)}</p>
+                    <p class="bonus-reveal__note">🤫 Ce bonus rejoint ton inventaire secret (max 2). Tu pourras l'utiliser lors d'un prochain tirage, via le choix « ⚡ Utiliser un bonus ».</p>
+                </div>
+            `,
+        };
     }
 
     if (result.type === "bonus-full") {
-        return `<div class="result result--fail"><span class="big">🎁</span>Inventaire plein (2/2) ! ${name} ne peut pas ouvrir de nouvelle caisse.</div>`;
+        return {
+            icon: "🎁",
+            title: `INVENTAIRE <span>PLEIN</span>`,
+            desc: `Inventaire plein (2/2) ! ${name} ne peut pas ouvrir de nouvelle caisse.`,
+            tone: "fail",
+        };
     }
 
     if (result.type === "bonus-used") {
         const def = getBonusDef(result.bonusId);
         const target = esc(result.targetName ?? "?");
         if (result.blocked) {
-            return `<div class="result result--fail"><span class="big">🛡️</span>${target} bloque le bonus de ${name} grace a son bouclier !</div>`;
+            return {
+                icon: "🛡️",
+                title: `BONUS <span>BLOQUÉ !</span>`,
+                desc: `${target} bloque le bonus de ${name} grâce à son bouclier !`,
+                tone: "fail",
+            };
         }
         const phrase = {
-            boost: `${name} utilise "Coup de boost" !`,
-            swap: `${name} echange sa place avec ${target} !`,
-            "send-back": `${name} renvoie ${target} au depart !`,
+            boost: `${name} utilise « Coup de boost » : +2 cases !`,
+            swap: `${name} échange sa place avec ${target} !`,
+            "send-back": `${name} renvoie ${target} au départ !`,
             sabotage: `${name} sabote ${target} (-2 cases) !`,
-            twister: `${name} declenche un Twister ! Toutes les positions sont redistribuees !`,
+            twister: `${name} déclenche un Twister ! Toutes les positions sont redistribuées !`,
             givre: `${name} givre ${target} : il/elle passera son prochain tour !`,
         }[result.bonusId] ?? `${name} utilise un bonus.`;
-        return `<div class="result result--success"><span class="big">${esc(def?.icon ?? "⚡")}</span>${phrase}</div>`;
+        return { icon: def?.icon ?? "⚡", title: `${esc(def?.label ?? "Bonus")} <span>!</span>`, desc: phrase };
     }
 
     if (result.type === "vacation-skip") {
-        return `<div class="result"><span class="big">🌴</span>${name} est en vacances : avance automatique d'une case. ${esc(result.substituteName)} prend la parole en premier !</div>`;
+        return {
+            icon: "🌴",
+            title: `PILOTE <span>AUTOMATIQUE</span>`,
+            desc: `${name} est en vacances : avance automatique d'une case. ${esc(result.substituteName)} prend la parole en premier !`,
+        };
     }
 
     if (result.type === "frozen-skip") {
-        return `<div class="result result--fail"><span class="big">❄️</span>${name} est givre(e) et passe son tour !</div>`;
+        return { icon: "❄️", title: `TOUR <span>GIVRÉ !</span>`, desc: `${name} est givré(e) et passe son tour !`, tone: "fail" };
     }
 
-    return "";
+    return { icon: "🏁", title: "", desc: "" };
 }
 
+// Retourne la tonalite du contenu affiche ("fail" pour un mauvais resultat).
 function renderTurn(state, ui) {
     if (state.winnerId) {
         const winner = state.players.find((p) => p.id === state.winnerId);
         turnContentEl.innerHTML = `
-            <div class="victory">
-                <div class="victory__sunburst"></div>
-                <div class="victory__trophy">🏆</div>
-                <div class="victory__avatar">${esc(winner?.avatar ?? "🎉")}</div>
-                <h2 class="victory__title">${esc(winner?.name ?? "?")}</h2>
-                <p class="victory__subtitle">remporte la course !</p>
-                <button class="dialog-btn dialog-btn--primary" type="button" data-action="new-race" style="margin-top:16px;">🔁 Nouvelle course</button>
-            </div>
+            <div class="victory__sunburst"></div>
+            <div class="cap">🏆 VICTOIRE</div>
+            <span class="reveal-avatar reveal-avatar--victory">${esc(winner?.avatar ?? "🎉")}</span>
+            <h2>${esc(winner?.name ?? "?")} <span>GAGNE !</span></h2>
+            <p>remporte la course !</p>
+            <button class="primary resultbtn" type="button" data-action="new-race">🔁 NOUVELLE COURSE</button>
         `;
-        return;
+        return "victory";
     }
 
     const current = state.players.find((p) => p.id === state.turn.playerId);
     if (!current) {
         turnContentEl.innerHTML = "";
-        return;
+        return null;
     }
 
     if (state.turn.phase === "drawn") {
         if (ui?.bonusPickerOpen && current.bonuses.length > 0) {
             turnContentEl.innerHTML = renderBonusPicker(current);
-            return;
+            return null;
         }
 
         const bonusCount = current.bonuses.length;
@@ -368,124 +502,78 @@ function renderTurn(state, ui) {
         const hasUsableBonus = current.bonuses.some((b) => !b.passive);
 
         turnContentEl.innerHTML = `
-            <div class="turn-announce"><span class="avatar">${esc(current.avatar)}</span>C'est au tour de ${esc(current.name)} !</div>
-            <div class="choices">
-                <button class="choice-btn choice-btn--advance" type="button" data-action="advance">
-                    <span class="icon">➡️</span>
-                    <span class="label">Avancer</span>
-                    <span class="hint">+1 case</span>
+            <div class="cap">PILOTE DU JOUR</div>
+            <span class="reveal-avatar">${esc(current.avatar)}</span>
+            <h2>${esc(current.name)} <span>entre en piste !</span></h2>
+            <p>Choisis ton action. Chaque option peut changer la course.</p>
+            <div class="choices${hasUsableBonus ? " choices--four" : ""}">
+                <button class="choice choice--advance" type="button" data-action="advance">
+                    <span>➡️</span><b>AVANCER</b><small>+1 case sûre</small>
                 </button>
-                <button class="choice-btn choice-btn--mega" type="button" data-action="megajump">
-                    <span class="icon">🚀</span>
-                    <span class="label">Mega Jump</span>
-                    <span class="hint">1/3 chance: +3 · sinon -2</span>
+                <button class="choice choice--mega" type="button" data-action="megajump">
+                    <span>🚀</span><b>MEGA JUMP</b><small>1/3 : +3 · sinon -2</small>
                 </button>
-                <button class="choice-btn choice-btn--bonus" type="button" data-action="bonus-chest" ${atCap ? "disabled" : ""}>
-                    <span class="icon">🎁</span>
-                    <span class="label">Caisse bonus</span>
-                    <span class="hint">${atCap ? "Inventaire plein (2/2)" : "Bonus secret aleatoire"}</span>
+                <button class="choice choice--bonus" type="button" data-action="bonus-chest" ${atCap ? "disabled" : ""}>
+                    <span>🎁</span><b>CAISSE BONUS</b><small>${atCap ? "Inventaire plein (2/2)" : "Bonus secret aléatoire"}</small>
                 </button>
                 ${
                     hasUsableBonus
                         ? `
-                <button class="choice-btn choice-btn--use-bonus" type="button" data-action="use-bonus-choice">
-                    <span class="icon">⚡</span>
-                    <span class="label">Utiliser un bonus</span>
-                    <span class="hint">${bonusCount} en reserve</span>
+                <button class="choice choice--use-bonus" type="button" data-action="use-bonus-choice">
+                    <span>⚡</span><b>UTILISER UN BONUS</b><small>${bonusCount} en réserve</small>
                 </button>`
                         : ""
                 }
             </div>
         `;
-        return;
+        return null;
     }
 
     if (state.turn.phase === "resolved") {
+        const view = resultView(state, state.turn.lastResult);
         turnContentEl.innerHTML = `
-            ${resultMarkup(state, state.turn.lastResult)}
-            <button class="ghost-btn ghost-btn--on-card" type="button" data-action="ack-turn" style="margin-top:14px;">✅ OK</button>
+            <div class="cap">RÉSULTAT DU TOUR</div>
+            <span class="reveal-avatar">${esc(view.icon)}</span>
+            <h2>${view.title}</h2>
+            <p>${view.desc}</p>
+            ${view.extra ?? ""}
+            <button class="primary resultbtn" type="button" data-action="ack-turn">CONTINUER LA COURSE</button>
         `;
-    }
-}
-
-function renderLog(state) {
-    if (state.log.length === 0) {
-        logListEl.innerHTML = `<li class="log-empty">Rien a raconter pour l'instant...</li>`;
-        return;
+        return view.tone ?? null;
     }
 
-    logListEl.innerHTML = state.log
-        .map((entry) => `<li>${esc(logLine(state, entry))}</li>`)
-        .join("");
-}
-
-function logLine(state, entry) {
-    if (entry.type === "drawn") {
-        const name = entry.playerName ?? playerName(state, entry.playerId);
-        return `🎯 ${name} a ete tire au sort.`;
-    }
-    if (entry.type === "vacation-skip") {
-        const name = entry.playerName ?? playerName(state, entry.playerId);
-        const substitute = entry.substituteName ?? playerName(state, entry.substituteId);
-        return `🌴 ${name} a ete tire au sort (en vacances, avance automatique). ${substitute} prend la parole en premier.`;
-    }
-    if (entry.type === "frozen-skip") {
-        const name = entry.playerName ?? playerName(state, entry.playerId);
-        return `❄️ ${name} etait givre(e) et a passe son tour.`;
-    }
-    if (entry.type === "turn") {
-        const name = entry.playerName ?? playerName(state, entry.playerId);
-        const r = entry.result;
-        if (r.type === "advance") return `➡️ ${name} a avance d'une case.`;
-        if (r.type === "megajump") return r.success ? `🚀 ${name} a reussi un Mega Jump (+3).` : `💥 ${name} a rate un Mega Jump (-2).`;
-        if (r.type === "bonus") return `🎁 ${name} a ouvert une caisse bonus.`;
-        if (r.type === "bonus-full") return `🎁 ${name} a tente d'ouvrir une caisse, inventaire plein (2/2).`;
-    }
-    if (entry.type === "bonus-used") {
-        const owner = entry.ownerName ?? playerName(state, entry.ownerId);
-        const target = entry.targetName ?? (entry.targetId ? playerName(state, entry.targetId) : null);
-        const def = getBonusDef(entry.bonusId);
-        if (entry.blocked) return `🛡️ ${target} a bloque un bonus de ${owner} grace a son bouclier !`;
-        if (def?.id === "boost") return `⚡ ${owner} a utilise "Coup de boost".`;
-        if (def?.id === "swap") return `🔀 ${owner} a echange sa place avec ${target}.`;
-        if (def?.id === "send-back") return `⏪ ${owner} a renvoye ${target} au depart.`;
-        if (def?.id === "sabotage") return `💣 ${owner} a saboté ${target} (-2).`;
-        if (def?.id === "twister") return `🌀 ${owner} a declenche un Twister (positions redistribuees).`;
-        if (def?.id === "givre") return `❄️ ${owner} a givre ${target}.`;
-        return `${owner} a utilise un bonus.`;
-    }
-    return "";
+    return null;
 }
 
 function bonusPickerItem(player, b) {
     if (b.passive) {
         return `
             <li class="peek-item">
-                <span>${esc(b.icon)}</span>
-                <span>${esc(b.label)} <em style="opacity:.7;">(actif en defense)</em></span>
+                <span class="peek-item__icon">${esc(b.icon)}</span>
+                <span><strong>${esc(b.label)}</strong> <em>(actif en défense)</em></span>
             </li>
         `;
     }
     if (b.needsTarget) {
         const targets = eligibleTargets(player.id);
         return `
-            <li>
-                <div class="peek-item"><span>${esc(b.icon)}</span><span>${esc(b.label)}</span></div>
-                <div class="target-picker" style="justify-content:flex-start;margin-top:4px;">
+            <li class="peek-item peek-item--stacked">
+                <span class="peek-item__head"><span class="peek-item__icon">${esc(b.icon)}</span><strong>${esc(b.label)}</strong></span>
+                <div class="target-picker">
                     ${targets
                         .map(
                             (t) =>
                                 `<button class="target-btn" type="button" data-action="use-bonus" data-owner-id="${player.id}" data-bonus-uid="${b.uid}" data-target-id="${t.id}">${esc(t.avatar)} ${esc(t.name)}</button>`
                         )
-                        .join("") || `<em style="font-size:0.8rem;color:var(--ink-soft);">Pas de cible disponible</em>`}
+                        .join("") || `<em>Pas de cible disponible</em>`}
                 </div>
             </li>
         `;
     }
     return `
         <li class="peek-item">
-            <span>${esc(b.icon)}</span>
-            <span>${esc(b.label)}</span>
+            <span class="peek-item__icon">${esc(b.icon)}</span>
+            <span><strong>${esc(b.label)}</strong></span>
             <button class="target-btn" type="button" data-action="use-bonus" data-owner-id="${player.id}" data-bonus-uid="${b.uid}" style="margin-left:auto;">Utiliser</button>
         </li>
     `;
@@ -493,13 +581,86 @@ function bonusPickerItem(player, b) {
 
 function renderBonusPicker(player) {
     return `
-        <div class="turn-announce">${esc(player.avatar)} Choisis ton bonus...</div>
-        <ul class="peek-list">
+        <div class="cap">BONUS EN RÉSERVE</div>
+        <span class="reveal-avatar">${esc(player.avatar)}</span>
+        <h2>Choisis <span>ton bonus</span></h2>
+        <ul class="peek-list peek-list--reveal">
             ${player.bonuses.map((b) => bonusPickerItem(player, b)).join("")}
         </ul>
-        <button class="ghost-btn ghost-btn--on-card" type="button" data-action="cancel-bonus-picker" style="margin-top:14px;">⬅️ Retour</button>
+        <button class="ghost-btn resultbtn" type="button" data-action="cancel-bonus-picker">⬅️ Retour</button>
     `;
 }
+
+/* ---------- Journal ---------- */
+
+function renderLog(state) {
+    if (state.log.length === 0) {
+        logListEl.innerHTML = `<li class="feed-empty">Rien à raconter pour l'instant…</li>`;
+        return;
+    }
+
+    logListEl.innerHTML = state.log
+        .map((entry) => logEvent(state, entry))
+        .filter(Boolean)
+        .map(
+            (e) => `
+                <li class="event">
+                    <span class="eventicon">${esc(e.icon)}</span>
+                    <div><b>${esc(e.text)}</b><small>${esc(e.kind)}</small></div>
+                </li>
+            `
+        )
+        .join("");
+}
+
+function logEvent(state, entry) {
+    if (entry.type === "drawn") {
+        const name = entry.playerName ?? playerName(state, entry.playerId);
+        return { icon: "🎯", text: `${name} a été tiré au sort.`, kind: "Tirage" };
+    }
+    if (entry.type === "vacation-skip") {
+        const name = entry.playerName ?? playerName(state, entry.playerId);
+        const substitute = entry.substituteName ?? playerName(state, entry.substituteId);
+        return {
+            icon: "🌴",
+            text: `${name} a été tiré au sort (en vacances, avance automatique). ${substitute} prend la parole en premier.`,
+            kind: "Vacances",
+        };
+    }
+    if (entry.type === "frozen-skip") {
+        const name = entry.playerName ?? playerName(state, entry.playerId);
+        return { icon: "❄️", text: `${name} était givré(e) et a passé son tour.`, kind: "Givre" };
+    }
+    if (entry.type === "turn") {
+        const name = entry.playerName ?? playerName(state, entry.playerId);
+        const r = entry.result;
+        if (r.type === "advance") return { icon: "➡️", text: `${name} a avancé d'une case.`, kind: "+1 case" };
+        if (r.type === "megajump") {
+            return r.success
+                ? { icon: "🚀", text: `${name} a réussi un Mega Jump.`, kind: "+3 cases" }
+                : { icon: "💥", text: `${name} a raté un Mega Jump.`, kind: "-2 cases" };
+        }
+        if (r.type === "bonus") return { icon: "🎁", text: `${name} a ouvert une caisse bonus.`, kind: "Bonus secret" };
+        if (r.type === "bonus-full") return { icon: "🎁", text: `${name} a tenté d'ouvrir une caisse, inventaire plein (2/2).`, kind: "Caisse" };
+    }
+    if (entry.type === "bonus-used") {
+        const owner = entry.ownerName ?? playerName(state, entry.ownerId);
+        const target = entry.targetName ?? (entry.targetId ? playerName(state, entry.targetId) : null);
+        const def = getBonusDef(entry.bonusId);
+        const kind = def?.label ?? "Bonus";
+        if (entry.blocked) return { icon: "🛡️", text: `${target} a bloqué un bonus de ${owner} grâce à son bouclier !`, kind: "Bouclier" };
+        if (def?.id === "boost") return { icon: "⚡", text: `${owner} a utilisé « Coup de boost ».`, kind };
+        if (def?.id === "swap") return { icon: "🔀", text: `${owner} a échangé sa place avec ${target}.`, kind };
+        if (def?.id === "send-back") return { icon: "⏪", text: `${owner} a renvoyé ${target} au départ.`, kind };
+        if (def?.id === "sabotage") return { icon: "💣", text: `${owner} a saboté ${target} (-2).`, kind };
+        if (def?.id === "twister") return { icon: "🌀", text: `${owner} a déclenché un Twister (positions redistribuées).`, kind };
+        if (def?.id === "givre") return { icon: "❄️", text: `${owner} a givré ${target}.`, kind };
+        return { icon: "⚡", text: `${owner} a utilisé un bonus.`, kind };
+    }
+    return null;
+}
+
+/* ---------- Choix d'avatar ---------- */
 
 export function toggleAvatarPicker(state, playerId, anchorRect) {
     const alreadyOpenForThis = !avatarPickerEl.classList.contains("hidden") && avatarPickerEl.dataset.playerId === playerId;
@@ -523,8 +684,8 @@ export function toggleAvatarPicker(state, playerId, anchorRect) {
     `;
 
     avatarPickerEl.classList.remove("hidden");
-    const top = Math.min(anchorRect.bottom + 8, window.innerHeight - 160);
-    const left = Math.min(anchorRect.left, window.innerWidth - 200);
+    const top = Math.min(anchorRect.bottom + 8, window.innerHeight - 240);
+    const left = Math.min(anchorRect.left, window.innerWidth - 290);
     avatarPickerEl.style.top = `${Math.max(8, top)}px`;
     avatarPickerEl.style.left = `${Math.max(8, left)}px`;
 }
@@ -534,4 +695,3 @@ export function closeAvatarPicker() {
     avatarPickerEl.innerHTML = "";
     delete avatarPickerEl.dataset.playerId;
 }
-

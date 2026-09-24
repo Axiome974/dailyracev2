@@ -9,42 +9,16 @@ import {
     setTrackLength,
 } from "./js/game.js";
 import { useBonus, BONUS_CATALOG, setBonusWeight, resetBonusWeights } from "./js/bonuses.js";
-import { renderAll, esc, toggleAvatarPicker, closeAvatarPicker, openTurnModal } from "./js/render.js";
+import { renderAll, esc, toggleAvatarPicker, closeAvatarPicker, openTurnModal, renderSpinFrame } from "./js/render.js";
 import { initRemote, claimPlayer } from "./js/remote.js";
 import { alertDialog, confirmDialog, promptDialog } from "./js/dialog.js";
 import { fireGrandFinale, preloadCelebration } from "./js/celebration.js";
-import { THEMES, getTheme, applyTheme, getMode, applyMode, initTheme } from "./js/theme.js";
 
-const FALLBACK_CONFETTI = ["#ff5d8f", "#fdcb6e", "#6c5ce7", "#00b894", "#0984e3", "#a29bfe"];
+const VICTORY_CONFETTI = ["#d9ff43", "#ffab64", "#80d7ff", "#f788d0", "#ffffff"];
 const flashLayerEl = document.getElementById("flash-layer");
-const appEl = document.querySelector(".app");
+const appEl = document.querySelector(".shell");
 
 preloadCelebration();
-initTheme();
-
-function currentConfettiColors() {
-    return THEMES.find((t) => t.id === getTheme())?.confetti ?? FALLBACK_CONFETTI;
-}
-
-function renderModeToggle() {
-    const active = getMode();
-    document.querySelectorAll(".mode-toggle__btn").forEach((btn) => {
-        btn.classList.toggle("mode-toggle__btn--active", btn.dataset.mode === active);
-    });
-}
-
-function renderThemeSwatches() {
-    const container = document.getElementById("theme-swatches");
-    const active = getTheme();
-    container.innerHTML = THEMES.map(
-        (t) => `
-            <button class="theme-swatch${t.id === active ? " theme-swatch--active" : ""}" type="button" data-action="pick-theme" data-theme="${t.id}" style="background: linear-gradient(135deg, ${t.swatch[0]}, ${t.swatch[1]});" title="${t.label}">
-                <span class="theme-swatch__dot" style="background:${t.dot};"></span>
-                <span class="theme-swatch__label">${t.label}</span>
-            </button>
-        `
-    ).join("");
-}
 
 function renderBonusWeights() {
     const container = document.getElementById("bonus-weights");
@@ -61,36 +35,9 @@ function renderBonusWeights() {
     }).join("");
 }
 
-function setTrackFace(face) {
-    const flipEl = document.getElementById("track-flip");
-    const backLog = document.getElementById("back-log");
-    const backBonuses = document.getElementById("back-bonuses");
-    const journalBtn = document.querySelector('[data-action="flip-track-card"]');
-    const helpBtn = document.querySelector('[data-action="show-bonus-help"]');
-
-    if (face === "track") {
-        flipEl.classList.remove("is-flipped");
-    } else {
-        backLog.classList.toggle("hidden", face !== "log");
-        backBonuses.classList.toggle("hidden", face !== "bonuses");
-        flipEl.classList.add("is-flipped");
-    }
-
-    journalBtn.textContent = face === "log" ? "🏁" : "📖";
-    journalBtn.title = face === "log" ? "Revenir a la piste" : "Voir le journal de bord";
-    helpBtn.textContent = face === "bonuses" ? "🏁" : "❓";
-    helpBtn.title = face === "bonuses" ? "Revenir a la piste" : "Voir tous les bonus";
-}
-
-function currentTrackFace() {
-    const flipEl = document.getElementById("track-flip");
-    if (!flipEl.classList.contains("is-flipped")) return "track";
-    return document.getElementById("back-bonuses").classList.contains("hidden") ? "log" : "bonuses";
-}
-
 document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
-    ["settings-modal", "bonus-weights-modal"].forEach((id) => {
+    ["settings-modal", "bonus-weights-modal", "bonus-catalog-modal"].forEach((id) => {
         const modal = document.getElementById(id);
         if (!modal.classList.contains("hidden")) {
             modal.classList.add("hidden");
@@ -120,7 +67,6 @@ function shakeScreen() {
 
 const addPlayerForm = document.getElementById("add-player-form");
 const addPlayerInput = document.getElementById("add-player-input");
-const turnContentEl = document.getElementById("turn-content");
 
 let previousWinnerId = null;
 const uiState = { bonusPickerOpen: false, modalSuppressed: false };
@@ -146,7 +92,7 @@ function render() {
     if (state.winnerId && state.winnerId !== previousWinnerId) {
         flashScreen();
         shakeScreen();
-        fireGrandFinale(currentConfettiColors());
+        fireGrandFinale(VICTORY_CONFETTI);
     }
     previousWinnerId = state.winnerId;
 }
@@ -177,7 +123,7 @@ function playDrawAnimation() {
 
     function tick() {
         const p = candidates[Math.floor(Math.random() * candidates.length)];
-        turnContentEl.innerHTML = `<div class="spin-announce"><span class="avatar">${esc(p.avatar)}</span>${esc(p.name)} ?</div>`;
+        renderSpinFrame(p);
         if (performance.now() - start < totalDuration) {
             delay = Math.min(delay * 1.15, 220);
             setTimeout(tick, delay);
@@ -189,7 +135,7 @@ function playDrawAnimation() {
 }
 
 function playChoiceCharge(btnEl, chargeClass, resolveFn, delay, { reveal = false } = {}) {
-    document.querySelectorAll(".choice-btn").forEach((b) => (b.disabled = true));
+    document.querySelectorAll(".choice").forEach((b) => (b.disabled = true));
     btnEl.classList.add(chargeClass);
     setTimeout(() => {
         if (reveal) {
@@ -214,13 +160,13 @@ document.addEventListener("click", async (e) => {
             playDrawAnimation();
             break;
         case "advance":
-            playChoiceCharge(target, "choice-btn--charging-advance", resolveAdvance, 450, { reveal: true });
+            playChoiceCharge(target, "choice--charging-advance", resolveAdvance, 450, { reveal: true });
             break;
         case "megajump":
-            playChoiceCharge(target, "choice-btn--charging-mega", resolveMegaJump, 650, { reveal: true });
+            playChoiceCharge(target, "choice--charging-mega", resolveMegaJump, 650, { reveal: true });
             break;
         case "bonus-chest":
-            playChoiceCharge(target, "choice-btn--charging-bonus", resolveBonusChest, 550);
+            playChoiceCharge(target, "choice--charging-bonus", resolveBonusChest, 550);
             break;
         case "use-bonus-choice":
             uiState.bonusPickerOpen = true;
@@ -247,14 +193,12 @@ document.addEventListener("click", async (e) => {
             toggleVacation(target.dataset.playerId);
             break;
         case "new-race":
-            if (await confirmDialog("Les positions et bonus seront remis a zero.", "Demarrer une nouvelle course ?")) {
+            if (await confirmDialog("Les positions et bonus seront remis à zéro.", "Démarrer une nouvelle course ?")) {
                 startNewRace();
             }
             break;
         case "open-settings":
             document.getElementById("settings-target").value = getState().track.length;
-            renderModeToggle();
-            renderThemeSwatches();
             document.getElementById("settings-modal").classList.remove("hidden");
             break;
         case "open-bonus-weights":
@@ -267,10 +211,6 @@ document.addEventListener("click", async (e) => {
         case "reset-weights":
             resetBonusWeights();
             renderBonusWeights();
-            break;
-        case "pick-mode":
-            applyMode(target.dataset.mode);
-            renderModeToggle();
             break;
         case "close-settings":
             document.getElementById("settings-modal").classList.add("hidden");
@@ -286,7 +226,7 @@ document.addEventListener("click", async (e) => {
             if (n === current) break;
             if (
                 await confirmDialog(
-                    `Objectif fixe a ${n}. La course va redemarrer (positions et bonus remis a zero).`,
+                    `Objectif fixé à ${n}. La course va redémarrer (positions et bonus remis à zéro).`,
                     "Confirmer ?"
                 )
             ) {
@@ -294,25 +234,21 @@ document.addEventListener("click", async (e) => {
             }
             break;
         }
-        case "pick-theme":
-            applyTheme(target.dataset.theme);
-            renderThemeSwatches();
-            break;
         case "export-session": {
             const code = exportStateString();
             navigator.clipboard?.writeText(code).catch(() => {});
             await promptDialog(
-                "Deja copie dans le presse-papier si possible. Sinon, selectionne et copie ce code manuellement :",
+                "Déjà copié dans le presse-papier si possible. Sinon, sélectionne et copie ce code manuellement :",
                 code,
                 "Code de session"
             );
             break;
         }
         case "import-session": {
-            const code = await promptDialog("Colle le code de session recu :", "", "Importer une session");
+            const code = await promptDialog("Colle le code de session reçu :", "", "Importer une session");
             if (!code) break;
             try {
-                if (await confirmDialog("Ta partie locale actuelle sera remplacee.", "Charger cette session ?")) {
+                if (await confirmDialog("Ta partie locale actuelle sera remplacée.", "Charger cette session ?")) {
                     importStateString(code);
                 }
             } catch (err) {
@@ -335,11 +271,11 @@ document.addEventListener("click", async (e) => {
             claimPlayer(select?.value);
             break;
         }
-        case "flip-track-card":
-            setTrackFace(currentTrackFace() === "log" ? "track" : "log");
-            break;
         case "show-bonus-help":
-            setTrackFace(currentTrackFace() === "bonuses" ? "track" : "bonuses");
+            document.getElementById("bonus-catalog-modal").classList.remove("hidden");
+            break;
+        case "close-bonus-catalog":
+            document.getElementById("bonus-catalog-modal").classList.add("hidden");
             break;
         default:
             break;

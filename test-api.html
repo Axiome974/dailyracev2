@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<body>
+
+<div id="content"></div>
+
+
+<script type="application/javascript">
+
+    const token = 'axm_6u1Mt_P6yEji-GoXB2xugJhm0Q1HnAkTtAHHQkzSWf8'
+    const API_URL = 'http://localhost:8090/api/storages';
+
+    fetch(API_URL, {
+        headers: { 'X-API-Key': token },
+    })
+    .then( response => response.json() )
+    .then(data => {
+        document.querySelector('#content').textContent = JSON.stringify(data.payload);
+
+    })
+
+</script>
+
+</body>
+</html>
